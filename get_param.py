@@ -1,0 +1,96 @@
+import argparse
+
+def str2bool(v):
+	"""
+	'boolean type variable' for add_argument
+	"""
+	if v.lower() in ('yes','true','t','y','1'):
+		return True
+	elif v.lower() in ('no','false','f','n','0'):
+		return False
+	else:
+		raise argparse.ArgumentTypeError('boolean value expected.')
+
+def get_params():
+	"""
+	return parameters for training / testing / plotting of models
+	:return: parameter-Namespace
+	"""
+	parser = argparse.ArgumentParser(description='train / test a pytorch model to simulate cloth')
+
+	# Network parameters
+	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","UNet"])
+	parser.add_argument('--SMP_model_type', default="Unet", type=str, help='model type used for SMP segmentation nets')
+	parser.add_argument('--SMP_encoder_name', default="resnet34", type=str, help='encoder name used for SMP segmentation nets')
+	parser.add_argument('--hidden_size', default=20, type=int, help='hidden size of network (default: 20)')
+	
+	# Training parameters
+	parser.add_argument('--n_epochs', default=100, type=int, help='number of epochs (after each epoch, the model gets saved)')
+	parser.add_argument('--n_batches_per_epoch', default=500, type=int, help='number of batches per epoch (default: 5000)')
+	parser.add_argument('--batch_size', default=100, type=int, help='batch size (default: 100)')
+	parser.add_argument('--average_sequence_length', default=1000, type=int, help='average sequence length in dataset (default: 1000)')
+	parser.add_argument('--dataset_size', default=500, type=int, help='size of dataset (default: 1000)')
+	parser.add_argument('--cuda', default=True, type=str2bool, help='use GPU')
+	parser.add_argument('--lr', default=0.01, type=float, help='learning rate of optimizer (default: 0.001)')
+	parser.add_argument('--clip_grad_norm', default=None, type=float, help='gradient norm clipping (default: None)')
+	parser.add_argument('--clip_grad_value', default=None, type=float, help='gradient value clipping (default: None)')
+	parser.add_argument('--plot', default=False, type=str2bool, help='plot during training')
+	parser.add_argument('--log', default=True, type=str2bool, help='log models / metrics during training (turn off for debugging)')
+
+	# Setup parameters
+	parser.add_argument('--height', default=64, type=int, help='cloth height')
+	parser.add_argument('--width', default=64, type=int, help='cloth width')
+	
+	# Cloth parameters
+	parser.add_argument('--stiffness', default=1000, type=float, help='stiffness parameter of cloth')
+	parser.add_argument('--shearing', default=100, type=float, help='shearing parameter of cloth')
+	parser.add_argument('--bending', default=10, type=float, help='bending parameter of cloth')
+	parser.add_argument('--g', default=1, type=float, help='gravitational constant')
+	parser.add_argument('--L_0', default=1, type=float, help='rest length of cloth grid edges')
+	parser.add_argument('--dt', default=1, type=float, help='timestep of cloth simulation integrator')
+	
+	# Load parameters
+	parser.add_argument('--l_stiffness', default=None, type=float, help='load stiffness parameter of cloth')
+	parser.add_argument('--l_shearing', default=None, type=float, help='load shearing parameter of cloth')
+	parser.add_argument('--l_bending', default=None, type=float, help='load bending parameter of cloth')
+	parser.add_argument('--l_g', default=None, type=float, help='load gravitational constant')
+	parser.add_argument('--l_L_0', default=None, type=float, help='load rest length of cloth grid edges')
+	parser.add_argument('--l_dt', default=1, type=float, help='load timestep of cloth simulation integrator')
+	parser.add_argument('--load_date_time', default=None, type=str, help='date_time of run to load (default: None)')
+	parser.add_argument('--load_index', default=None, type=int, help='index of run to load (default: None)')
+	parser.add_argument('--load_optimizer', default=False, type=str2bool, help='load state of optimizer (default: True)')
+	parser.add_argument('--load_latest', default=False, type=str2bool, help='load latest version for training (if True: leave load_date_time and load_index None. default: False)')
+	
+	# parse parameters
+	params = parser.parse_args()
+	
+	params.l_stiffness = params.stiffness if params.l_stiffness is None else params.l_stiffness
+	params.l_shearing = params.shearing if params.l_shearing is None else params.l_shearing
+	params.l_bending = params.bending if params.l_bending is None else params.l_bending
+	params.l_g = params.g if params.l_g is None else params.l_g
+	params.l_L_0 = params.L_0 if params.l_L_0 is None else params.l_L_0
+	params.l_dt = params.dt if params.l_dt is None else params.l_dt
+	
+	return params
+
+params = get_params()
+
+def get_hyperparam(params):
+	if params.net=="SMP":
+		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
+	return f"net {params.net}; hs {params.hidden_size}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
+
+def get_load_hyperparam(params):
+	if params.net=="SMP":
+		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"
+	return f"net {params.net}; hs {params.hidden_size}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"
+
+def toCuda(x):
+	if type(x) is tuple or type(x) is list:
+		return [xi.cuda() if params.cuda else xi for xi in x]
+	return x.cuda() if params.cuda else x
+
+def toCpu(x):
+	if type(x) is tuple or type(x) is list:
+		return [xi.detach().cpu() for xi in x]
+	return x.detach().cpu()
