@@ -42,7 +42,7 @@ def rotation_matrix(dyaw=0.0,dpitch=0.0,droll=0.0,device=None):
 
 
 class Dataset:
-	def __init__(self,h,w,batch_size=100,dataset_size=1000,average_sequence_length=5000,interactive=False,dt=1,L_0=1,stiffness_range=None,shearing_range=None,bending_range=None,mass_range=None,grav_range=None):
+	def __init__(self,h,w,batch_size=100,dataset_size=1000,average_sequence_length=5000,interactive=False,dt=1,L_0=1,stiffness_range=None,shearing_range=None,bending_range=None,grav_range=None,mass_range=None):
 		self.h,self.w = h,w
 		self.batch_size = batch_size
 		self.dataset_size = dataset_size
@@ -61,8 +61,8 @@ class Dataset:
 		self.stiffness_range = log_range_params(stiffness_range)
 		self.shearing_range = log_range_params(shearing_range)
 		self.bending_range = log_range_params(bending_range)
-		self.mass_range = log_range_params(mass_range)
 		self.grav_range = log_range_params(grav_range)
+		self.mass_range = log_range_params(mass_range)
 		
 		x_space = torch.linspace(0,L_0*(w-1),w)
 		y_space = torch.linspace(-L_0*(h-1)/2,L_0*(h-1)/2,h)
@@ -82,22 +82,22 @@ class Dataset:
 		self.stiffnesses = torch.zeros(self.dataset_size)
 		self.shearings = torch.zeros(self.dataset_size)
 		self.bendings = torch.zeros(self.dataset_size)
-		self.masses = torch.zeros(self.dataset_size)
 		self.gravs = torch.zeros(self.dataset_size)
+		self.masses = torch.zeros(self.dataset_size,1,1,1)
 		
 		for i in range(self.dataset_size):
 			self.reset_env(i)
 		
 		self.M = torch.ones(1,1,h,w)
-		self.M[0] = self.M[-1] = self.M[:,0] = self.M[:,-1] = 0.5
-		self.M[0,0] = self.M[0,-1] = self.M[-1,0] = self.M[-1,-1] = 0.25
+		self.M[:,:,0] = self.M[:,:,-1] = self.M[:,:,:,0] = self.M[:,:,:,-1] = 0.5
+		self.M[:,:,0,0] = self.M[:,:,0,-1] = self.M[:,:,-1,0] = self.M[:,:,-1,-1] = 0.25
 		
 	def reset_env(self,index):
 		self.stiffnesses[index] = torch.exp(self.stiffness_range[0]+torch.rand(1)*self.stiffness_range[1])
 		self.shearings[index] = torch.exp(self.shearing_range[0]+torch.rand(1)*self.shearing_range[1])
 		self.bendings[index] = torch.exp(self.bending_range[0]+torch.rand(1)*self.bending_range[1])
-		self.masses[index] = torch.exp(self.mass_range[0]+torch.rand(1)*self.mass_range[1])
 		self.gravs[index] = torch.exp(self.grav_range[0]+torch.rand(1)*self.grav_range[1])
+		self.masses[index] = torch.exp(self.mass_range[0]+torch.rand(1)*self.mass_range[1])
 			
 		self.x_v[index] = self.x_v_0.clone()
 		self.conditions[index,0] = self.x_v[index,:3,0,0]
@@ -137,7 +137,7 @@ class Dataset:
 			v[:,:,0,0] = v[:,:,-1,0] = 0
 			return x,v
 		
-		return self.x_v[self.indices], self.M, BoundaryConditions
+		return self.x_v[self.indices], self.stiffnesses[self.indices], self.shearings[self.indices], self.bendings[self.indices], self.gravs[self.indices], self.masses[self.indices]*self.M, BoundaryConditions
 	
 	def tell(self,x_v_new):
 		self.x_v[self.indices,:,:,:] = x_v_new.detach()

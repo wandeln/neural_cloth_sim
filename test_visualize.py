@@ -30,7 +30,7 @@ plt.figure(1,figsize=(10,10))
 
 with torch.no_grad():#enable_grad():#
 	for epoch in range(100):
-		dataset = Dataset(params.height,params.width,1,1,params.average_sequence_length)
+		dataset = Dataset(params.height,params.width,1,1,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,grav_range=params.g,mass_range=None)
 		FPS=0
 		start_time = time.time()
 
@@ -40,10 +40,9 @@ with torch.no_grad():#enable_grad():#
 		for t in range(params.average_sequence_length):
 			print(f"t: {t}")
 			
-			x_v, M, bc = dataset.ask()
-			x_v, M = toCuda([x_v, M])
-			a = cloth_net(x_v) # codo: pass M as well
-			
+			x_v, stiffnesses, shearings, bendings, gravs, M, bc = dataset.ask()
+			x_v, stiffnesses, shearings, bendings, gravs, M = toCuda([x_v, stiffnesses, shearings, bendings, gravs, M])
+			a = cloth_net(x_v, stiffnesses, shearings, bendings) # codo: pass M as well
 			
 			# integrate accelerations
 			v_new = x_v[:,3:] + params.dt*a
@@ -65,6 +64,7 @@ with torch.no_grad():#enable_grad():#
 				ax.set_zlim(-120, 1.01)
 				ax.set_xlim(-64, 64)
 				ax.set_ylim(-32, 96)
+				plt.title(f"stiff: {stiffnesses[0].cpu().numpy().round(3)}; shear: {shearings[0].cpu().numpy().round(3)}; bend: {bendings[0].cpu().numpy().round(3)}")
 				plt.draw()
 				plt.pause(0.001)
 				if save:

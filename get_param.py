@@ -19,7 +19,7 @@ def get_params():
 	parser = argparse.ArgumentParser(description='train / test a pytorch model to simulate cloth')
 
 	# Network parameters
-	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","UNet"])
+	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","UNet"])
 	parser.add_argument('--SMP_model_type', default="Unet", type=str, help='model type used for SMP segmentation nets')
 	parser.add_argument('--SMP_encoder_name', default="resnet34", type=str, help='encoder name used for SMP segmentation nets')
 	parser.add_argument('--hidden_size', default=20, type=int, help='hidden size of network (default: 20)')
@@ -43,8 +43,11 @@ def get_params():
 	
 	# Cloth parameters
 	parser.add_argument('--stiffness', default=1000, type=float, help='stiffness parameter of cloth')
+	parser.add_argument('--min_stiffness', default=None, type=float, help='min stiffness range parameter of cloth (default: same as stiffness)')
 	parser.add_argument('--shearing', default=100, type=float, help='shearing parameter of cloth')
+	parser.add_argument('--min_shearing', default=None, type=float, help='min shearing range parameter of cloth (default: same as shearing)')
 	parser.add_argument('--bending', default=10, type=float, help='bending parameter of cloth')
+	parser.add_argument('--min_bending', default=None, type=float, help='min bending range parameter of cloth (default: same as bending)')
 	parser.add_argument('--g', default=1, type=float, help='gravitational constant')
 	parser.add_argument('--L_0', default=1, type=float, help='rest length of cloth grid edges')
 	parser.add_argument('--dt', default=1, type=float, help='timestep of cloth simulation integrator')
@@ -64,6 +67,13 @@ def get_params():
 	# parse parameters
 	params = parser.parse_args()
 	
+	params.min_stiffness = params.stiffness if params.min_stiffness is None else params.min_stiffness
+	params.min_shearing = params.shearing if params.min_shearing is None else params.min_shearing
+	params.min_bending = params.bending if params.min_bending is None else params.min_bending
+	params.stiffness_range = [params.min_stiffness,params.stiffness]
+	params.shearing_range = [params.min_shearing,params.shearing]
+	params.bending_range = [params.min_bending,params.bending]
+	
 	params.l_stiffness = params.stiffness if params.l_stiffness is None else params.l_stiffness
 	params.l_shearing = params.shearing if params.l_shearing is None else params.l_shearing
 	params.l_bending = params.bending if params.l_bending is None else params.l_bending
@@ -76,11 +86,15 @@ def get_params():
 params = get_params()
 
 def get_hyperparam(params):
+	if params.net=="SMP_param":
+		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
 	return f"net {params.net}; hs {params.hidden_size}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
 
 def get_load_hyperparam(params):
+	if params.net=="SMP_param":
+		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.l_dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"
 	return f"net {params.net}; hs {params.hidden_size}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"

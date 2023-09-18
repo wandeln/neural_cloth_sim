@@ -30,15 +30,16 @@ if params.load_latest or params.load_date_time is not None or params.load_index 
 	print(f"loaded: {params.load_date_time}, {params.load_index}")
 params.load_index = 0 if params.load_index is None else params.load_index
 
-dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length)
+dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,grav_range=params.g,mass_range=None)
 
 for epoch in range(params.load_index,params.n_epochs):
 	print(f"epoch {epoch} / {params.n_epochs}")
 	
 	for step in range(params.n_batches_per_epoch):
 		
-		x_v, M, bc = dataset.ask()
-		x_v, M = toCuda([x_v, M])
+		x_v, stiffnesses, shearings, bendings, gravs, M, bc = dataset.ask()
+		x_v, stiffnesses, shearings, bendings, gravs, M = toCuda([x_v, stiffnesses, shearings, bendings, gravs, M])
+		#print(f"stiffnesses: {stiffnesses} / {shearings} / {bendings} / {gravs}")
 		
 		warmup_iterations = 5
 		if epoch==0 and step<500:
@@ -47,7 +48,7 @@ for epoch in range(params.load_index,params.n_epochs):
 			warmup_iterations = 30
 		
 		for i in range(warmup_iterations):
-			a = cloth_net(x_v) # codo: pass M as well
+			a = cloth_net(x_v, stiffnesses, shearings, bendings) # codo: pass M as well
 			
 			# integrate accelerations
 			v_new = x_v[:,3:] + params.dt*a
@@ -57,10 +58,10 @@ for epoch in range(params.load_index,params.n_epochs):
 			x_new,v_new = bc(x_new,v_new)
 			
 			# compute loss
-			L_stiff = L_stiffness(x_new)
-			L_shear = L_shearing(x_new)
-			L_bend = L_bending(x_new)
-			L_grav = L_gravity(x_new, M)
+			L_stiff = L_stiffness(x_new, stiffnesses)
+			L_shear = L_shearing(x_new, shearings)
+			L_bend = L_bending(x_new, bendings)
+			L_grav = L_gravity(x_new, M, gravs)
 			L_inert = L_inertia(a, M)
 			L = L_stiff + L_shear + L_bend + L_grav + L_inert
 			

@@ -33,7 +33,7 @@ def L_bending(x_new,bending=params.bending):
 	return -torch.mean(bending*(torch.mean(bend_1,[1,2])+torch.mean(bend_2,[1,2])))
 
 def L_gravity(x_new,M,g=params.g):
-	return torch.mean(g*M*x_new[:,2:3])
+	return torch.mean(g*torch.mean(M*x_new[:,2:3],[1,2,3]))
 
 def L_inertia(a,M):
 	return 0.5*torch.mean(torch.sum(M*a**2,dim=1))*params.dt**2
