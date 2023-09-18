@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 from setups import Dataset
 from cloth_net import get_Net
-from loss_terms import L_stiffness,L_shear,L_gravity,L_inertia
 from Logger import Logger
 import torch
 from torch.optim import Adam
@@ -42,7 +41,7 @@ with torch.no_grad():#enable_grad():#
 			print(f"t: {t}")
 			
 			x_v, M, bc = dataset.ask()
-			x_v, M = toCuda([x_v,M])
+			x_v, M = toCuda([x_v, M])
 			a = cloth_net(x_v) # codo: pass M as well
 			
 			

@@ -31,7 +31,7 @@ def get_params():
 	parser.add_argument('--average_sequence_length', default=1000, type=int, help='average sequence length in dataset (default: 1000)')
 	parser.add_argument('--dataset_size', default=500, type=int, help='size of dataset (default: 1000)')
 	parser.add_argument('--cuda', default=True, type=str2bool, help='use GPU')
-	parser.add_argument('--lr', default=0.01, type=float, help='learning rate of optimizer (default: 0.001)')
+	parser.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer (default: 0.001)')
 	parser.add_argument('--clip_grad_norm', default=None, type=float, help='gradient norm clipping (default: None)')
 	parser.add_argument('--clip_grad_value', default=None, type=float, help='gradient value clipping (default: None)')
 	parser.add_argument('--plot', default=False, type=str2bool, help='plot during training')

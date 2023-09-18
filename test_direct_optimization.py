@@ -27,7 +27,7 @@ for epoch in range(params.n_epochs):
 		print(f"( {step} / {params.n_batches_per_epoch} )")
 		
 		x_v, M, bc = dataset.ask()
-		x_v, M = toCuda([x_v,M])
+		x_v, M = toCuda([x_v, M])
 		
 		a = toCuda(torch.zeros(params.batch_size,3,params.height,params.width)).requires_grad_()
 		o = Adam([a],lr=0.02)

@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from setups import Dataset
 from cloth_net import get_Net
-from loss_terms import L_stiffness,L_shear,L_bend,L_gravity,L_inertia
+from loss_terms import L_stiffness,L_shearing,L_bending,L_gravity,L_inertia
 from Logger import Logger
 import torch
 from torch.optim import Adam
@@ -36,10 +36,9 @@ for epoch in range(params.load_index,params.n_epochs):
 	print(f"epoch {epoch} / {params.n_epochs}")
 	
 	for step in range(params.n_batches_per_epoch):
-		print(f"( {step} / {params.n_batches_per_epoch} )")
 		
 		x_v, M, bc = dataset.ask()
-		x_v, M = toCuda([x_v,M])
+		x_v, M = toCuda([x_v, M])
 		
 		warmup_iterations = 5
 		if epoch==0 and step<500:
@@ -59,12 +58,11 @@ for epoch in range(params.load_index,params.n_epochs):
 			
 			# compute loss
 			L_stiff = L_stiffness(x_new)
-			L_sh = L_shear(x_new)
-			L_be = L_bend(x_new)
+			L_shear = L_shearing(x_new)
+			L_bend = L_bending(x_new)
 			L_grav = L_gravity(x_new, M)
 			L_inert = L_inertia(a, M)
-			L = L_stiff + L_sh + L_be + L_grav + L_inert
-			print(f"L: {L.detach().cpu().numpy()}; L_stiff: {L_stiff.detach().cpu().numpy()}; L_shear: {L_sh.detach().cpu().numpy()}; L_bend: {L_be.detach().cpu().numpy()}; L_grav: {L_grav.detach().cpu().numpy()}; L_inert: {L_inert.detach().cpu().numpy()}")
+			L = L_stiff + L_shear + L_bend + L_grav + L_inert
 			
 			# optimize Network
 			optimizer.zero_grad()
@@ -77,6 +75,25 @@ for epoch in range(params.load_index,params.n_epochs):
 				torch.nn.utils.clip_grad_norm_(cloth_net.parameters(),params.clip_grad_norm)
 			
 			optimizer.step()
+		
+		
+		# log training metrics
+		if step%10 == 0:
+			L = toCpu(L).detach().numpy()
+			L_stiff = toCpu(L_stiff).detach().numpy()
+			L_shear = toCpu(L_shear).detach().numpy()
+			L_bend = toCpu(L_bend).detach().numpy()
+			L_grav = toCpu(L_grav).detach().numpy()
+			L_inert = toCpu(L_inert).detach().numpy()
+			logger.log(f"L",L,epoch*params.n_batches_per_epoch+step)
+			logger.log(f"L_stiff",L_stiff,epoch*params.n_batches_per_epoch+step)
+			logger.log(f"L_shear",L_shear,epoch*params.n_batches_per_epoch+step)
+			logger.log(f"L_bend",L_bend,epoch*params.n_batches_per_epoch+step)
+			logger.log(f"L_grav",L_grav,epoch*params.n_batches_per_epoch+step)
+			logger.log(f"L_inert",L_inert,epoch*params.n_batches_per_epoch+step)
+			
+			print(f"( {step} / {params.n_batches_per_epoch} ) L: {L}; L_stiff: {L_stiff}; L_shear: {L_shear}; L_bend: {L_bend}; L_grav: {L_grav}; L_inert: {L_inert}")
+		
 		
 		# feed new x and v back to dataset
 		x_v_new = toCpu(torch.cat([x_new.detach(),v_new.detach()],dim=1)).detach()
