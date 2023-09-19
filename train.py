@@ -41,7 +41,7 @@ for epoch in range(params.load_index,params.n_epochs):
 		x_v, stiffnesses, shearings, bendings, gravs, M = toCuda([x_v, stiffnesses, shearings, bendings, gravs, M])
 		#print(f"stiffnesses: {stiffnesses} / {shearings} / {bendings} / {gravs}")
 		
-		warmup_iterations = 5
+		warmup_iterations = 10#5
 		if epoch==0 and step<500:
 			warmup_iterations = 10
 		if epoch==0 and step<100:
