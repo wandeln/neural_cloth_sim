@@ -42,7 +42,7 @@ def rotation_matrix(dyaw=0.0,dpitch=0.0,droll=0.0,device=None):
 
 
 class Dataset:
-	def __init__(self,h,w,batch_size=100,dataset_size=1000,average_sequence_length=5000,interactive=False,dt=1,L_0=1,stiffness_range=None,shearing_range=None,bending_range=None,grav_range=None,mass_range=None):
+	def __init__(self,h,w,batch_size=100,dataset_size=1000,average_sequence_length=5000,interactive=False,dt=1,L_0=1,stiffness_range=None,shearing_range=None,bending_range=None,a_ext_range=None):
 		self.h,self.w = h,w
 		self.batch_size = batch_size
 		self.dataset_size = dataset_size
@@ -61,12 +61,17 @@ class Dataset:
 		self.stiffness_range = log_range_params(stiffness_range)
 		self.shearing_range = log_range_params(shearing_range)
 		self.bending_range = log_range_params(bending_range)
-		self.grav_range = log_range_params(grav_range)
-		self.mass_range = log_range_params(mass_range)
+		self.g_vect = torch.tensor([0,0,-1.]).unsqueeze(0).repeat(self.dataset_size,1).unsqueeze(2).unsqueeze(3) # gravity vector. CODO: radnom directions / strengths of gravity
+		self.a_ext_range = a_ext_range
+		self.a_exts = torch.ones(self.dataset_size,3,self.h,self.w)*self.g_vect# external forces
+		self.a_exts_damping = 0.999
+		self.da_exts_dt = torch.zeros(self.dataset_size,3,self.h,self.w)# derivatives of external forces
+		self.da_exts_dt_damping = 0.95
 		
 		x_space = torch.linspace(0,L_0*(w-1),w)
 		y_space = torch.linspace(-L_0*(h-1)/2,L_0*(h-1)/2,h)
 		y_grid,x_grid = torch.meshgrid(y_space,x_space,indexing="ij")
+		self.y_mesh,self.x_mesh = torch.meshgrid([torch.arange(0,self.h),torch.arange(0,self.w)])
 		
 		x_0 = torch.cat([x_grid.unsqueeze(0),y_grid.unsqueeze(0),torch.zeros(1,h,w)],dim=0)
 		v_0 = torch.zeros(3,h,w)
@@ -82,8 +87,7 @@ class Dataset:
 		self.stiffnesses = torch.zeros(self.dataset_size)
 		self.shearings = torch.zeros(self.dataset_size)
 		self.bendings = torch.zeros(self.dataset_size)
-		self.gravs = torch.zeros(self.dataset_size)
-		self.masses = torch.zeros(self.dataset_size,1,1,1)
+		#self.a_exts = torch.ones(self.dataset_size,3,self.h,self.w)*torch.tensor([0,0,-1]).unsqueeze(0).unsqueeze(2).unsqueeze(3) # init with gravity. CODO: radnom directions / strengths of gravity
 		
 		for i in range(self.dataset_size):
 			self.reset_env(i)
@@ -96,9 +100,8 @@ class Dataset:
 		self.stiffnesses[index] = torch.exp(self.stiffness_range[0]+torch.rand(1)*self.stiffness_range[1])
 		self.shearings[index] = torch.exp(self.shearing_range[0]+torch.rand(1)*self.shearing_range[1])
 		self.bendings[index] = torch.exp(self.bending_range[0]+torch.rand(1)*self.bending_range[1])
-		self.gravs[index] = torch.exp(self.grav_range[0]+torch.rand(1)*self.grav_range[1])
-		self.masses[index] = torch.exp(self.mass_range[0]+torch.rand(1)*self.mass_range[1])
-			
+		#self.a_exts[index] = torch.exp(self.a_ext_range[0]+torch.rand(1)*self.a_ext_range[1]) # TODO: init with gravity
+		
 		self.x_v[index] = self.x_v_0.clone()
 		self.conditions[index,0] = self.x_v[index,:3,0,0]
 		self.conditions[index,1] = self.x_v[index,:3,-1,0]
@@ -117,6 +120,12 @@ class Dataset:
 		self.conditions[index] = torch.einsum("ab,cb->ca",self.rotations[index],self.conditions[index])
 		self.x_v[index,:3] = torch.einsum("ab,bcd->acd",self.rotations[index],self.x_v[index,:3])
 		#print(f"reset {index}")
+		
+		self.g_vect[index,:,0,0] = torch.einsum("ab,b->a",rotation_matrix((torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14),torch.tensor([0,0,-1.0]))
+		self.a_exts[index,:,:,:] = self.g_vect[index]
+		#print(f"rot mat: {rotation_matrix((torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14)}")
+		#print(f"g_vect: {self.g_vect[index,:,0,0]}")
+		self.da_exts_dt[index,:,:,:] = 0
 	
 	def ask(self):
 		"""
@@ -128,16 +137,30 @@ class Dataset:
 		self.indices = np.random.choice(self.dataset_size,self.batch_size)
 		self.T[self.indices] = self.T[self.indices]+1
 		self.conditions[self.indices] = torch.einsum("dab,dcb->dca",self.rot_speed[self.indices],self.conditions[self.indices])
-			
+		
+		
+		# update external forces (CODO: clip min/max forces) ...not very efficient (slows down test_cv2_interactive by approx 10%)
+		self.a_exts[self.indices,:,:,:] = self.a_exts_damping*self.a_exts[self.indices,:,:,:]+(1-self.a_exts_damping)*self.g_vect[self.indices]+0.01*self.da_exts_dt[self.indices,:,:,:] # TODO: add g_vect
+		if torch.rand(1)<0.1:
+			gaussian_w = torch.rand(1)*300
+			gaussian = torch.exp(-((self.x_mesh-torch.rand(1,1)*self.w)**2+(self.y_mesh-torch.rand(1,1)*self.h)**2)/gaussian_w).unsqueeze(0).unsqueeze(1)
+			gaussian = gaussian*torch.randn(1,3,1,1)
+		else:
+			gaussian = 0
+		self.da_exts_dt[self.indices,:,:,:] = self.da_exts_dt_damping*self.da_exts_dt[self.indices,:,:,:]+0.1*torch.randn(1,3,1,1)+gaussian
+		
+		
 		def BoundaryConditions(x,v):
 			f = self.rot_speed[self.indices]
 			
 			x[:,:3,0,0] = self.conditions[self.indices,0,:]*(torch.cos(self.T[self.indices]*self.pinch_freq[self.indices])*0.4+0.6) + torch.sin(self.T[self.indices]*self.translation_freq[self.indices])*self.translation_amp[self.indices]
 			x[:,:3,-1,0] = self.conditions[self.indices,1,:]*(torch.cos(self.T[self.indices]*self.pinch_freq[self.indices])*0.4+0.6) + torch.sin(self.T[self.indices]*self.translation_freq[self.indices])*self.translation_amp[self.indices]
 			v[:,:,0,0] = v[:,:,-1,0] = 0
-			return x,v
+			return x,v # CODO: be more careful with BC...
 		
-		return self.x_v[self.indices], self.stiffnesses[self.indices], self.shearings[self.indices], self.bendings[self.indices], self.gravs[self.indices], self.masses[self.indices]*self.M, BoundaryConditions
+		# TODO: add random noise to a_exts
+		
+		return self.x_v[self.indices], self.stiffnesses[self.indices], self.shearings[self.indices], self.bendings[self.indices], self.a_exts[self.indices], self.M, BoundaryConditions
 	
 	def tell(self,x_v_new):
 		self.x_v[self.indices,:,:,:] = x_v_new.detach()

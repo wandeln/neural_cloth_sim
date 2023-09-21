@@ -9,6 +9,8 @@ def get_Net(params):
 		net = Cloth_net(params.SMP_model_type,params.SMP_encoder_name)
 	elif params.net == "SMP_param":
 		net = Cloth_net_param(params.SMP_model_type,params.SMP_encoder_name)
+	elif params.net == "SMP_param_a":
+		net = Cloth_net_param_a(params.SMP_model_type,params.SMP_encoder_name)
 	return net
 
 class Cloth_net(nn.Module):
@@ -42,7 +44,7 @@ class Cloth_net(nn.Module):
 			raise Exception("invalid SMP_model_type!")
 		self.model = SMP_model_type(encoder_name=encoder_name,in_channels=12,classes=3)
 	
-	def forward(self, x_v, stiffnesses=None, shearings=None, bendings=None):
+	def forward(self, x_v, stiffnesses=None, shearings=None, bendings=None, a=None):
 		bs,c,h,w = x_v.shape
 		device = x_v.device
 		di = torch.cat([x_v[:,:,1:]-x_v[:,:,:-1],torch.zeros(bs,c,1,w,device=device)],dim=2)
@@ -83,13 +85,56 @@ class Cloth_net_param(nn.Module):
 			raise Exception("invalid SMP_model_type!")
 		self.model = SMP_model_type(encoder_name=encoder_name,in_channels=12+3,classes=3)
 	
-	def forward(self, x_v, stiffnesses, shearings, bendings):
+	def forward(self, x_v, stiffnesses, shearings, bendings, a=None):
 		bs,c,h,w = x_v.shape
 		device = x_v.device
 		ones = torch.ones(1,1,h,w,device=device)
 		di = torch.cat([x_v[:,:,1:]-x_v[:,:,:-1],torch.zeros(bs,c,1,w,device=device)],dim=2)
 		dj = torch.cat([x_v[:,:,:,1:]-x_v[:,:,:,:-1],torch.zeros(bs,c,h,1,device=device)],dim=3)
 		x = torch.cat([di,dj,torch.log(stiffnesses).unsqueeze(1).unsqueeze(2).unsqueeze(3)*ones,torch.log(shearings).unsqueeze(1).unsqueeze(2).unsqueeze(3)*ones,torch.log(bendings).unsqueeze(1).unsqueeze(2).unsqueeze(3)*ones],dim=1)
+		x = self.model(x)
+		return 10*torch.tanh(x/10)
+
+class Cloth_net_param_a(nn.Module):
+	
+	def __init__(self, model_type, encoder_name):
+		"""
+		same as Cloth_net but makes use of additional parameters for stiffness, shearing and bending
+		:model_type: ... see diverse models below
+		:encoder_name: e.g. tu-mobilevitv2_100 or resnet34 ... more examples: https://github.com/qubvel/segmentation_models.pytorch
+		"""
+		
+		super(Cloth_net_param_a, self).__init__()
+		if model_type=="Unet":
+			SMP_model_type = smp.Unet
+		elif model_type=="UnetPlusPlus":
+			SMP_model_type = smp.UnetPlusPlus
+		elif model_type=="MAnet":
+			SMP_model_type = smp.MAnet
+		elif model_type=="Linknet":
+			SMP_model_type = smp.Linknet
+		elif model_type=="FPN":
+			SMP_model_type = smp.FPN
+		elif model_type=="PSPNet":
+			SMP_model_type = smp.PSPNet
+		elif model_type=="PAN":
+			SMP_model_type = smp.PAN
+		elif model_type=="DeepLabV3":
+			SMP_model_type = smp.DeepLabV3
+		elif model_type=="DeepLabV3Plus":
+			SMP_model_type = smp.DeepLabV3Plus
+		else:
+			raise Exception("invalid SMP_model_type!")
+		self.model = SMP_model_type(encoder_name=encoder_name,in_channels=12+3+3,classes=3)
+	
+	def forward(self, x_v, stiffnesses, shearings, bendings, a):
+		bs,c,h,w = x_v.shape
+		device = x_v.device
+		ones = torch.ones(1,1,h,w,device=device)
+		di = torch.cat([x_v[:,:,1:]-x_v[:,:,:-1],torch.zeros(bs,c,1,w,device=device)],dim=2)
+		dj = torch.cat([x_v[:,:,:,1:]-x_v[:,:,:,:-1],torch.zeros(bs,c,h,1,device=device)],dim=3)
+		# CODO: normalize a to have 0-mean
+		x = torch.cat([di,dj,torch.log(stiffnesses).unsqueeze(1).unsqueeze(2).unsqueeze(3)*ones,torch.log(shearings).unsqueeze(1).unsqueeze(2).unsqueeze(3)*ones,torch.log(bendings).unsqueeze(1).unsqueeze(2).unsqueeze(3)*ones,a],dim=1)
 		x = self.model(x)
 		return 10*torch.tanh(x/10)
 
@@ -114,7 +159,7 @@ class Cloth_Unet(nn.Module):
 		self.deconv5 = nn.ConvTranspose2d( 2*self.hidden_size, self.hidden_size, kernel_size=5, stride = 2, padding=0)
 		self.conv6 = nn.Conv2d( 2*self.hidden_size,3,kernel_size=[3,3],padding=[1,1])
 	
-	def forward(self,x_v, stiffnesses=None, shearings=None, bendings=None):
+	def forward(self,x_v, stiffnesses=None, shearings=None, bendings=None, a=None):
 		bs,c,h,w = x_v.shape
 		device = x_v.device
 		di = torch.cat([x_v[:,:,1:]-x_v[:,:,:-1],torch.zeros(bs,c,1,w,device=device)],dim=2)

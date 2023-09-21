@@ -30,19 +30,26 @@ plt.figure(1,figsize=(10,10))
 
 with torch.no_grad():#enable_grad():#
 	for epoch in range(100):
-		dataset = Dataset(params.height,params.width,1,1,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,grav_range=params.g,mass_range=None)
+		dataset = Dataset(params.height,params.width,1,1,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,a_ext_range=params.g)
 		FPS=0
 		start_time = time.time()
 
-		#x_v, M, bc = dataset.ask()
-		#x_v, M = toCuda([x_v,M])
+		#x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
+		#x_v, stiffnesses, shearings, bendings, a_ext, M = toCuda([x_v, stiffnesses, shearings, bendings, a_ext, M])
+		#a_ext[:]=0
+		#a_ext[:,2]=-1
+		
+		#print(f"a_ext: {a_ext[0,:,0,0]}")
 		
 		for t in range(params.average_sequence_length):
 			print(f"t: {t}")
 			
-			x_v, stiffnesses, shearings, bendings, gravs, M, bc = dataset.ask()
-			x_v, stiffnesses, shearings, bendings, gravs, M = toCuda([x_v, stiffnesses, shearings, bendings, gravs, M])
-			a = cloth_net(x_v, stiffnesses, shearings, bendings) # codo: pass M as well
+			x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
+			x_v, stiffnesses, shearings, bendings, a_ext, M = toCuda([x_v, stiffnesses, shearings, bendings, a_ext, M])
+			
+			#shearings[0:1] = bendings[0:1] = np.exp(np.cos(t/100)*3-1)
+			
+			a = cloth_net(x_v, stiffnesses, shearings, bendings, a_ext)
 			
 			# integrate accelerations
 			v_new = x_v[:,3:] + params.dt*a
@@ -60,11 +67,14 @@ with torch.no_grad():#enable_grad():#
 				plt.clf()
 				fig, ax = plt.subplots(1,1,subplot_kw={"projection": "3d"},num=1)
 				surf = ax.plot_surface(x_v_new[0,0].cpu(), x_v_new[0,1].cpu(), x_v_new[0,2].cpu(), linewidth=0.1, antialiased=False,edgecolors='k')
-				ax.scatter(x_v_new[0,0,[0,-1],0].cpu(),x_v_new[0,1,[0,-1],0].cpu(),x_v_new[0,2,[0,-1],0].cpu(),marker='o',color='r',depthshade=0)
+				ax.scatter(x_v_new[0,0,[0,-1],0].cpu(),x_v_new[0,1,[0,-1],0].cpu(),x_v_new[0,2,[0,-1],0].cpu(),marker='o',color='g',depthshade=0)
+				q_stride, q_l=8,10
+				ax.quiver(x_v_new[0,0,::q_stride,::q_stride].cpu(), x_v_new[0,1,::q_stride,::q_stride].cpu(), x_v_new[0,2,::q_stride,::q_stride].cpu(), \
+					q_l*a_ext[0,0,::q_stride,::q_stride].cpu(), q_l*a_ext[0,1,::q_stride,::q_stride].cpu(), q_l*a_ext[0,2,::q_stride,::q_stride].cpu(),color='r')
 				ax.set_zlim(-120, 1.01)
 				ax.set_xlim(-64, 64)
 				ax.set_ylim(-32, 96)
-				plt.title(f"stiff: {stiffnesses[0].cpu().numpy().round(3)}; shear: {shearings[0].cpu().numpy().round(3)}; bend: {bendings[0].cpu().numpy().round(3)}")
+				plt.title("stiff: {:.3f}; shear: {:.3f}; bend: {:.3f}".format(stiffnesses[0].cpu().numpy(),shearings[0].cpu().numpy(),bendings[0].cpu().numpy()))
 				plt.draw()
 				plt.pause(0.001)
 				if save:

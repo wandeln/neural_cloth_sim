@@ -32,6 +32,9 @@ def L_bending(x_new,bending=params.bending):
 	bend_2 = torch.einsum('abcd,abcd->acd',dx_n_j[:,:,:,1:],dx_n_j[:,:,:,:-1])
 	return -torch.mean(bending*(torch.mean(bend_1,[1,2])+torch.mean(bend_2,[1,2])))
 
+def L_a_ext(a,a_ext):
+	return -torch.mean(torch.einsum('abcd,abcd->acd',a,a_ext))*params.dt**2
+
 def L_gravity(x_new,M,g=params.g):
 	return torch.mean(g*torch.mean(M*x_new[:,2:3],[1,2,3]))
 

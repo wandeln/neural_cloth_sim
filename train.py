@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from setups import Dataset
 from cloth_net import get_Net
-from loss_terms import L_stiffness,L_shearing,L_bending,L_gravity,L_inertia
+from loss_terms import L_stiffness,L_shearing,L_bending,L_a_ext,L_inertia
 from Logger import Logger
 import torch
 from torch.optim import Adam
@@ -30,16 +30,16 @@ if params.load_latest or params.load_date_time is not None or params.load_index 
 	print(f"loaded: {params.load_date_time}, {params.load_index}")
 params.load_index = 0 if params.load_index is None else params.load_index
 
-dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,grav_range=params.g,mass_range=None)
+dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,a_ext_range=params.g)
 
 for epoch in range(params.load_index,params.n_epochs):
 	print(f"epoch {epoch} / {params.n_epochs}")
 	
 	for step in range(params.n_batches_per_epoch):
 		
-		x_v, stiffnesses, shearings, bendings, gravs, M, bc = dataset.ask()
-		x_v, stiffnesses, shearings, bendings, gravs, M = toCuda([x_v, stiffnesses, shearings, bendings, gravs, M])
-		#print(f"stiffnesses: {stiffnesses} / {shearings} / {bendings} / {gravs}")
+		x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
+		x_v, stiffnesses, shearings, bendings, a_ext, M = toCuda([x_v, stiffnesses, shearings, bendings, a_ext, M])
+		#print(f"stiffnesses: {stiffnesses} / {shearings} / {bendings} / {a_ext}")
 		
 		warmup_iterations = 10#5
 		if epoch==0 and step<500:
@@ -48,7 +48,7 @@ for epoch in range(params.load_index,params.n_epochs):
 			warmup_iterations = 30
 		
 		for i in range(warmup_iterations):
-			a = cloth_net(x_v, stiffnesses, shearings, bendings) # codo: pass M as well
+			a = cloth_net(x_v, stiffnesses, shearings, bendings, a_ext)
 			
 			# integrate accelerations
 			v_new = x_v[:,3:] + params.dt*a
@@ -61,9 +61,10 @@ for epoch in range(params.load_index,params.n_epochs):
 			L_stiff = L_stiffness(x_new, stiffnesses)
 			L_shear = L_shearing(x_new, shearings)
 			L_bend = L_bending(x_new, bendings)
-			L_grav = L_gravity(x_new, M, gravs)
+			L_ext = L_a_ext(a, a_ext)
 			L_inert = L_inertia(a, M)
-			L = L_stiff + L_shear + L_bend + L_grav + L_inert
+			
+			L = L_stiff + L_shear + L_bend + L_ext + L_inert
 			
 			# optimize Network
 			optimizer.zero_grad()
@@ -84,16 +85,16 @@ for epoch in range(params.load_index,params.n_epochs):
 			L_stiff = toCpu(L_stiff).detach().numpy()
 			L_shear = toCpu(L_shear).detach().numpy()
 			L_bend = toCpu(L_bend).detach().numpy()
-			L_grav = toCpu(L_grav).detach().numpy()
+			L_ext = toCpu(L_ext).detach().numpy()
 			L_inert = toCpu(L_inert).detach().numpy()
 			logger.log(f"L",L,epoch*params.n_batches_per_epoch+step)
 			logger.log(f"L_stiff",L_stiff,epoch*params.n_batches_per_epoch+step)
 			logger.log(f"L_shear",L_shear,epoch*params.n_batches_per_epoch+step)
 			logger.log(f"L_bend",L_bend,epoch*params.n_batches_per_epoch+step)
-			logger.log(f"L_grav",L_grav,epoch*params.n_batches_per_epoch+step)
+			logger.log(f"L_ext",L_ext,epoch*params.n_batches_per_epoch+step)
 			logger.log(f"L_inert",L_inert,epoch*params.n_batches_per_epoch+step)
 			
-			print(f"( {step} / {params.n_batches_per_epoch} ) L: {L}; L_stiff: {L_stiff}; L_shear: {L_shear}; L_bend: {L_bend}; L_grav: {L_grav}; L_inert: {L_inert}")
+			print(f"( {step} / {params.n_batches_per_epoch} ) L: {L}; L_stiff: {L_stiff}; L_shear: {L_shear}; L_bend: {L_bend}; L_ext: {L_ext}; L_inert: {L_inert}")
 		
 		
 		# feed new x and v back to dataset

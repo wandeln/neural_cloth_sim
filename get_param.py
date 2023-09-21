@@ -19,7 +19,7 @@ def get_params():
 	parser = argparse.ArgumentParser(description='train / test a pytorch model to simulate cloth')
 
 	# Network parameters
-	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","UNet"])
+	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","SMP_param_a","UNet"])
 	parser.add_argument('--SMP_model_type', default="Unet", type=str, help='model type used for SMP segmentation nets')
 	parser.add_argument('--SMP_encoder_name', default="resnet34", type=str, help='encoder name used for SMP segmentation nets')
 	parser.add_argument('--hidden_size', default=20, type=int, help='hidden size of network (default: 20)')
@@ -86,14 +86,14 @@ def get_params():
 params = get_params()
 
 def get_hyperparam(params):
-	if params.net=="SMP_param":
+	if params.net=="SMP_param" or params.net=="SMP_param_a":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
 	return f"net {params.net}; hs {params.hidden_size}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
 
 def get_load_hyperparam(params):
-	if params.net=="SMP_param":
+	if params.net=="SMP_param" or params.net=="SMP_param_a":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.l_dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"
