@@ -24,9 +24,10 @@ date_time,index = logger.load_state(cloth_net,None,datetime=params.load_date_tim
 print(f"loaded: {date_time}, {index}")
 cloth_net.eval()
 
+custom_setup = True # False #
 
 #params.dt=0.1
-plt.figure(1,figsize=(10,10))
+plt.figure(1,figsize=(20,20),dpi=200)
 
 with torch.no_grad():#enable_grad():#
 	for epoch in range(100):
@@ -34,20 +35,23 @@ with torch.no_grad():#enable_grad():#
 		FPS=0
 		start_time = time.time()
 
-		#x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
-		#x_v, stiffnesses, shearings, bendings, a_ext, M = toCuda([x_v, stiffnesses, shearings, bendings, a_ext, M])
-		#a_ext[:]=0
-		#a_ext[:,2]=-1
+		if custom_setup:
+			x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
+			x_v, stiffnesses, shearings, bendings, a_ext, M = toCuda([x_v, stiffnesses, shearings, bendings, a_ext, M])
+			a_ext[:]=0
+			a_ext[:,2]=-0.125
 		
-		#print(f"a_ext: {a_ext[0,:,0,0]}")
+			#print(f"a_ext: {a_ext[0,:,0,0]}")
 		
 		for t in range(params.average_sequence_length):
 			print(f"t: {t}")
 			
-			x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
-			x_v, stiffnesses, shearings, bendings, a_ext, M = toCuda([x_v, stiffnesses, shearings, bendings, a_ext, M])
-			
-			#shearings[0:1] = bendings[0:1] = np.exp(np.cos(t/100)*3-1)
+			if custom_setup:
+				shearings[0:1] = bendings[0:1] = 10#np.exp(np.cos(t/100)*3-1)#1#
+				stiffnesses[0:1] = 10000#np.cos(t/100)*450+550#
+			else:
+				x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
+				x_v, stiffnesses, shearings, bendings, a_ext, M = toCuda([x_v, stiffnesses, shearings, bendings, a_ext, M])
 			
 			a = cloth_net(x_v, stiffnesses, shearings, bendings, a_ext)
 			
@@ -59,8 +63,10 @@ with torch.no_grad():#enable_grad():#
 			x_new,v_new = bc(x_new,v_new)
 			
 			x_v_new = torch.cat([x_new.detach(),v_new.detach()],dim=1)
-			dataset.tell(toCpu(x_v_new).detach())
-			#x_v = x_v_new
+			if custom_setup:
+				x_v = x_v_new
+			else:
+				dataset.tell(toCpu(x_v_new).detach())
 			
 			
 			if t%5==0:

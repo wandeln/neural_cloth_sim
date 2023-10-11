@@ -57,12 +57,16 @@ class Dataset:
 			range_params = [range_params,range_params] if type(range_params) is not list else range_params
 			range_params = np.log(range_params)
 			return range_params[0],range_params[1]-range_params[0]
+		def range_params(r_params,default_param=1):# useful to sample parameters from "exponential distribution"
+			r_params = default_param if r_params is None else r_params
+			r_params = [r_params,r_params] if type(r_params) is not list else r_params
+			return r_params[0],r_params[1]-r_params[0]
 		
 		self.stiffness_range = log_range_params(stiffness_range)
 		self.shearing_range = log_range_params(shearing_range)
 		self.bending_range = log_range_params(bending_range)
 		self.g_vect = torch.tensor([0,0,-1.]).unsqueeze(0).repeat(self.dataset_size,1).unsqueeze(2).unsqueeze(3) # gravity vector. CODO: radnom directions / strengths of gravity
-		self.a_ext_range = a_ext_range
+		self.a_ext_range = range_params(a_ext_range)
 		self.a_exts = torch.ones(self.dataset_size,3,self.h,self.w)*self.g_vect# external forces
 		self.a_exts_damping = 0.999
 		self.da_exts_dt = torch.zeros(self.dataset_size,3,self.h,self.w)# derivatives of external forces
@@ -101,14 +105,15 @@ class Dataset:
 		self.shearings[index] = torch.exp(self.shearing_range[0]+torch.rand(1)*self.shearing_range[1])
 		self.bendings[index] = torch.exp(self.bending_range[0]+torch.rand(1)*self.bending_range[1])
 		#self.a_exts[index] = torch.exp(self.a_ext_range[0]+torch.rand(1)*self.a_ext_range[1]) # TODO: init with gravity
+		g_scale = self.a_ext_range[0]+torch.rand(1)*self.a_ext_range[1]
 		
 		self.x_v[index] = self.x_v_0.clone()
 		self.conditions[index,0] = self.x_v[index,:3,0,0]
 		self.conditions[index,1] = self.x_v[index,:3,-1,0]
 		self.T[index] = 0
-		yaw = (torch.rand(1)-0.5)*2*2*3.14
-		pitch = (torch.rand(1)-0.5)*2*2*3.14
-		roll = (torch.rand(1)-0.5)*2*2*3.14
+		yaw = (torch.rand(1)-0.5)*2*2*3.14#0#
+		pitch = (torch.rand(1)-0.5)*2*2*3.14#0#
+		roll = (torch.rand(1)-0.5)*2*2*3.14#0#
 		dyaw = (torch.rand(1)-0.5)*2*2*3.14*0.01
 		dpitch = (torch.rand(1)-0.5)*2*2*3.14*0.01
 		droll = (torch.rand(1)-0.5)*2*2*3.14*0.01 # keep only roll for rotation
@@ -121,7 +126,7 @@ class Dataset:
 		self.x_v[index,:3] = torch.einsum("ab,bcd->acd",self.rotations[index],self.x_v[index,:3])
 		#print(f"reset {index}")
 		
-		self.g_vect[index,:,0,0] = torch.einsum("ab,b->a",rotation_matrix((torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14),torch.tensor([0,0,-1.0]))
+		self.g_vect[index,:,0,0] = torch.einsum("ab,b->a",rotation_matrix((torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14),torch.tensor([0,0,-1.0])*g_scale)
 		self.a_exts[index,:,:,:] = self.g_vect[index]
 		#print(f"rot mat: {rotation_matrix((torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14,(torch.rand(1)-0.5)*2*2*3.14)}")
 		#print(f"g_vect: {self.g_vect[index,:,0,0]}")
