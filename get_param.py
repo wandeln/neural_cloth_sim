@@ -19,7 +19,7 @@ def get_params():
 	parser = argparse.ArgumentParser(description='train / test a pytorch model to simulate cloth')
 
 	# Network parameters
-	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","SMP_param_a","SMP_param_a_gated","SMP_param_a_gated2","UNet","UNet_param_a"])
+	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","SMP_param_a","SMP_param_a_gated","SMP_param_a_gated2","SMP_param_a_gated3","UNet","UNet_param_a"])
 	parser.add_argument('--SMP_model_type', default="Unet", type=str, help='model type used for SMP segmentation nets')
 	parser.add_argument('--SMP_encoder_name', default="resnet34", type=str, help='encoder name used for SMP segmentation nets')
 	parser.add_argument('--hidden_size', default=20, type=int, help='hidden size of network (default: 20)')
@@ -31,6 +31,9 @@ def get_params():
 	parser.add_argument('--average_sequence_length', default=1000, type=int, help='average sequence length in dataset (default: 1000)')
 	parser.add_argument('--dataset_size', default=500, type=int, help='size of dataset (default: 1000)')
 	parser.add_argument('--cuda', default=True, type=str2bool, help='use GPU')
+	parser.add_argument('--ema_beta', default=0.995, type=float, help='ema beta (default: 0.995)')
+	parser.add_argument('--ema_update_after_step', default=None, type=int, help='only after this number of .update() calls will it start updating EMA (default: 100)')
+	parser.add_argument('--ema_update_every', default=1, type=int, help='how often to actually update EMA, to save on compute (default: 1)')
 	parser.add_argument('--lr', default=0.001, type=float, help='learning rate of optimizer (default: 0.001)')
 	parser.add_argument('--clip_grad_norm', default=None, type=float, help='gradient norm clipping (default: None)')
 	parser.add_argument('--clip_grad_value', default=None, type=float, help='gradient value clipping (default: None)')
@@ -62,7 +65,8 @@ def get_params():
 	parser.add_argument('--l_L_0', default=None, type=float, help='load rest length of cloth grid edges')
 	parser.add_argument('--l_dt', default=1, type=float, help='load timestep of cloth simulation integrator')
 	parser.add_argument('--load_date_time', default=None, type=str, help='date_time of run to load (default: None)')
-	parser.add_argument('--load_index', default=None, type=int, help='index of run to load (default: None)')
+	parser.add_argument('--load_index', default=None, type=str, help='index of run to load (default: None)')
+	#parser.add_argument('--load_index', default=None, type=int, help='index of run to load (default: None)')
 	parser.add_argument('--load_optimizer', default=False, type=str2bool, help='load state of optimizer (default: True)')
 	parser.add_argument('--load_latest', default=False, type=str2bool, help='load latest version for training (if True: leave load_date_time and load_index None. default: False)')
 	
@@ -85,12 +89,14 @@ def get_params():
 	params.l_L_0 = params.L_0 if params.l_L_0 is None else params.l_L_0
 	params.l_dt = params.dt if params.l_dt is None else params.l_dt
 	
+	params.ema_update_after_step = params.n_batches_per_epoch*10 if params.ema_update_after_step is None else params.ema_update_after_step
+	
 	return params
 
 params = get_params()
 
 def get_hyperparam(params):
-	if params.net=="SMP_param" or params.net=="SMP_param_a" or params.net=="SMP_param_a_gated" or params.net=="SMP_param_a_gated2":
+	if params.net=="SMP_param" or params.net=="SMP_param_a" or params.net=="SMP_param_a_gated" or params.net=="SMP_param_a_gated2" or params.net=="SMP_param_a_gated3":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
@@ -99,7 +105,7 @@ def get_hyperparam(params):
 	return f"net {params.net}; hs {params.hidden_size}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
 
 def get_load_hyperparam(params):
-	if params.net=="SMP_param" or params.net=="SMP_param_a" or params.net=="SMP_param_a_gated" or params.net=="SMP_param_a_gated2":
+	if params.net=="SMP_param" or params.net=="SMP_param_a" or params.net=="SMP_param_a_gated" or params.net=="SMP_param_a_gated2" or params.net=="SMP_param_a_gated3":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.l_dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"

@@ -6,6 +6,7 @@ import torch
 from torch.optim import Adam
 import numpy as np
 from get_param import params,toCuda,toCpu,get_hyperparam
+from ema_pytorch import EMA
 import time
 import os
 from moviepy.editor import *
@@ -20,11 +21,22 @@ if save:
 	fps = 30
 
 cloth_net = toCuda(get_Net(params))
-date_time,index = logger.load_state(cloth_net,None,datetime=params.load_date_time,index=params.load_index)
+
+ema_net = EMA(
+	cloth_net,
+	beta = params.ema_beta,								# exponential moving average factor
+	update_after_step = params.ema_update_after_step,	# only after this number of .update() calls will it start updating
+	update_every = params.ema_update_every,				# how often to actually update, to save on compute (updates every 10th .update() call)
+	power = 3.0/4.0,
+	include_online_model = True
+)
+
+date_time,index = logger.load_state(ema_net,None,datetime=params.load_date_time,index=params.load_index)
 print(f"loaded: {date_time}, {index}")
+cloth_net = ema_net#.online_model
 cloth_net.eval()
 
-custom_setup = True # False #
+custom_setup = False # True # 
 
 #params.dt=0.1
 plt.figure(1,figsize=(20,20),dpi=200)
@@ -39,7 +51,7 @@ with torch.no_grad():#enable_grad():#
 			x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
 			x_v, stiffnesses, shearings, bendings, a_ext, M = toCuda([x_v, stiffnesses, shearings, bendings, a_ext, M])
 			a_ext[:]=0
-			a_ext[:,2]=-0.125
+			a_ext[:,2]=-0.125#1#
 		
 			#print(f"a_ext: {a_ext[0,:,0,0]}")
 		
@@ -47,7 +59,7 @@ with torch.no_grad():#enable_grad():#
 			print(f"t: {t}")
 			
 			if custom_setup:
-				shearings[0:1] = bendings[0:1] = 10#np.exp(np.cos(t/100)*3-1)#1#
+				shearings[0:1] = bendings[0:1] = 10#0.1#np.exp(np.cos(t/100)*3-1)#1#
 				stiffnesses[0:1] = 10000#np.cos(t/100)*450+550#
 			else:
 				x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()

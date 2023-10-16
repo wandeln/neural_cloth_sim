@@ -4,9 +4,10 @@ from cloth_net import get_Net
 #from loss_terms import L_stiffness,L_shearing,L_bending,L_a_ext,L_inertia
 from Logger import Logger
 import torch
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 import numpy as np
 from get_param import params,toCuda,toCpu,get_hyperparam,get_load_hyperparam
+from ema_pytorch import EMA
 
 torch.manual_seed(0)
 torch.set_num_threads(4)
@@ -17,7 +18,17 @@ print(f"Parameters: {vars(params)}")
 cloth_net = toCuda(get_Net(params))
 cloth_net.train()
 
-optimizer = Adam(cloth_net.parameters(),lr=params.lr)
+ema_net = EMA(
+	cloth_net,
+	beta = params.ema_beta,								# exponential moving average factor
+	update_after_step = params.ema_update_after_step,	# only after this number of .update() calls will it start updating
+	update_every = params.ema_update_every,				# how often to actually update, to save on compute (updates every 10th .update() call)
+	power = 3.0/4.0,
+	include_online_model = True
+)
+
+#optimizer = Adam(cloth_net.parameters(),lr=params.lr)
+optimizer = AdamW(cloth_net.parameters(),lr=params.lr)
 
 logger = Logger(get_hyperparam(params),use_csv=False,use_tensorboard=params.log)
 if params.load_latest or params.load_date_time is not None or params.load_index is not None:
@@ -32,7 +43,7 @@ params.load_index = 0 if params.load_index is None else params.load_index
 
 dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,a_ext_range=params.g)
 
-for epoch in range(params.load_index,params.n_epochs):
+for epoch in range(int(params.load_index),params.n_epochs):
 	print(f"epoch {epoch} / {params.n_epochs}")
 	
 	for step in range(params.n_batches_per_epoch):
@@ -102,7 +113,7 @@ for epoch in range(params.load_index,params.n_epochs):
 				torch.nn.utils.clip_grad_norm_(cloth_net.parameters(),params.clip_grad_norm)
 			
 			optimizer.step()
-		
+		ema_net.update()
 		
 		# log training metrics
 		if step%10 == 0:
@@ -142,4 +153,4 @@ for epoch in range(params.load_index,params.n_epochs):
 			plt.draw()
 			plt.pause(0.001)
 
-	logger.save_state(cloth_net,optimizer,epoch+1)
+	logger.save_state(ema_net,optimizer,epoch+1)
