@@ -42,6 +42,7 @@ if params.load_latest or params.load_date_time is not None or params.load_index 
 params.load_index = 0 if params.load_index is None else params.load_index
 
 dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,a_ext_range=params.g)
+n_vertices = params.height*params.width
 
 for epoch in range(int(params.load_index),params.n_epochs):
 	print(f"epoch {epoch} / {params.n_epochs}")
@@ -80,7 +81,9 @@ for epoch in range(int(params.load_index),params.n_epochs):
 			stiffness_j = torch.mean((torch.sqrt(torch.sum(dx_j[:,:3]**2,1))-params.L_0)**2,[1,2])
 			L_stiff = stiffnesses*(stiffness_i + stiffness_j)
 			
+			# simple version of shearing / bending loss
 			# shearing loss
+			"""
 			angle_1 = torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,:-1],dx_n_j[:,:,:-1])
 			angle_2 = torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,:-1],dx_n_j[:,:,1:])
 			angle_3 = torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,1:],dx_n_j[:,:,:-1])
@@ -91,6 +94,24 @@ for epoch in range(int(params.load_index),params.n_epochs):
 			bend_1 = torch.einsum('abcd,abcd->acd',dx_n_i[:,:,1:],dx_n_i[:,:,:-1])
 			bend_2 = torch.einsum('abcd,abcd->acd',dx_n_j[:,:,:,1:],dx_n_j[:,:,:,:-1])
 			L_bend = -bendings*(torch.mean(bend_1,[1,2])+torch.mean(bend_2,[1,2])-2)
+			"""
+			
+			# Davids version of shearing / bending loss
+
+			# shearing loss
+			angle_1 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,:-1],dx_n_j[:,:,:-1]).clamp(-0.999,0.999))
+			angle_2 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,:-1],dx_n_j[:,:,1:]).clamp(-0.999,0.999) )
+			angle_3 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,1:] ,dx_n_j[:,:,:-1]).clamp(-0.999,0.999))
+			angle_4 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,1:] ,dx_n_j[:,:,1:]).clamp(-0.999,0.999) )
+			L_shear = shearings*(torch.sum((angle_1 - torch.pi/2)**2,[1,2])
+								+torch.sum((angle_2 - torch.pi/2)**2,[1,2])
+								+torch.sum((angle_3 - torch.pi/2)**2,[1,2])
+								+torch.sum((angle_4 - torch.pi/2)**2,[1,2])) / n_vertices
+
+			# bending loss
+			bend_1 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,1:]  ,dx_n_i[:,:,:-1]).clamp(-0.999,0.999)  )
+			bend_2 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_j[:,:,:,1:],dx_n_j[:,:,:,:-1]).clamp(-0.999,0.999))
+			L_bend = bendings*(torch.sum((bend_1 - 0)**2,[1,2])+torch.sum((bend_2 - 0)**2,[1,2])) / n_vertices
 			
 			# external forces loss
 			L_ext = -torch.mean(torch.einsum('abcd,abcd->acd',a,a_ext),[1,2])*params.dt**2

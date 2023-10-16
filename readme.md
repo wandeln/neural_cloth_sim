@@ -1,7 +1,8 @@
 # Cloth net
 
-this repository contains code to train and test neural networks to perform cloth simulations.
-The loss is based on the SLUG paper.
+This repository contains code to train and test neural networks to perform cloth simulations.
+The loss is based on the SNUG paper (https://arxiv.org/abs/2204.02219).
+It shares some similarity with the HOOD paper (https://dolorousrtur.github.io/hood/), however we are using a grid-based U-Net and not a GNN and take cloth parameters (stiffness / shearing / bending) as additional parameters.
 
 ## Training
 To train a net, you can call for example:

@@ -36,7 +36,7 @@ print(f"loaded: {date_time}, {index}")
 cloth_net = ema_net#.online_model
 cloth_net.eval()
 
-custom_setup = False # True # 
+custom_setup = True # False # 
 
 #params.dt=0.1
 plt.figure(1,figsize=(20,20),dpi=200)
