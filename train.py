@@ -5,6 +5,7 @@ from cloth_net import get_Net
 from Logger import Logger
 import torch
 from torch.optim import Adam, AdamW
+from torch.optim.lr_scheduler import MultiStepLR
 import numpy as np
 from get_param import params,toCuda,toCpu,get_hyperparam,get_load_hyperparam
 from ema_pytorch import EMA
@@ -29,6 +30,7 @@ ema_net = EMA(
 
 #optimizer = Adam(cloth_net.parameters(),lr=params.lr)
 optimizer = AdamW(cloth_net.parameters(),lr=params.lr)
+scheduler = MultiStepLR(optimizer, milestones=[25,50,75], gamma=0.2)
 
 logger = Logger(get_hyperparam(params),use_csv=False,use_tensorboard=params.log)
 if params.load_latest or params.load_date_time is not None or params.load_index is not None:
@@ -41,7 +43,7 @@ if params.load_latest or params.load_date_time is not None or params.load_index 
 	print(f"loaded: {params.load_date_time}, {params.load_index}")
 params.load_index = 0 if params.load_index is None else params.load_index
 
-dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,a_ext_range=params.g)
+dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,stiffness_range=params.stiffness_range,shearing_range=params.shearing_range,bending_range=params.bending_range,a_ext_range=params.g,a_ext_noise_range=params.a_ext_noise_range)
 n_vertices = params.height*params.width
 
 for epoch in range(int(params.load_index),params.n_epochs):
@@ -97,21 +99,25 @@ for epoch in range(int(params.load_index),params.n_epochs):
 			"""
 			
 			# Davids version of shearing / bending loss
-
+			eps = 1e-7
 			# shearing loss
-			angle_1 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,:-1],dx_n_j[:,:,:-1]).clamp(-0.999,0.999))
-			angle_2 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,:-1],dx_n_j[:,:,1:]).clamp(-0.999,0.999) )
-			angle_3 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,1:] ,dx_n_j[:,:,:-1]).clamp(-0.999,0.999))
-			angle_4 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,1:] ,dx_n_j[:,:,1:]).clamp(-0.999,0.999) )
+			angle_1 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,:-1],dx_n_j[:,:,:-1]).clamp(eps-1,1-eps))
+			angle_2 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,:-1],dx_n_j[:,:,1:]).clamp(eps-1,1-eps) )
+			angle_3 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,1:] ,dx_n_j[:,:,:-1]).clamp(eps-1,1-eps))
+			angle_4 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,:,1:] ,dx_n_j[:,:,1:]).clamp(eps-1,1-eps) )
 			L_shear = shearings*(torch.sum((angle_1 - torch.pi/2)**2,[1,2])
 								+torch.sum((angle_2 - torch.pi/2)**2,[1,2])
 								+torch.sum((angle_3 - torch.pi/2)**2,[1,2])
 								+torch.sum((angle_4 - torch.pi/2)**2,[1,2])) / n_vertices
 
 			# bending loss
-			bend_1 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,1:]  ,dx_n_i[:,:,:-1]).clamp(-0.999,0.999)  )
-			bend_2 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_j[:,:,:,1:],dx_n_j[:,:,:,:-1]).clamp(-0.999,0.999))
+			bend_1 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_i[:,:,1:]  ,dx_n_i[:,:,:-1]).clamp(eps-1,1-eps)  )
+			bend_2 = torch.arccos(torch.einsum('abcd,abcd->acd',dx_n_j[:,:,:,1:],dx_n_j[:,:,:,:-1]).clamp(eps-1,1-eps))
 			L_bend = bendings*(torch.sum((bend_1 - 0)**2,[1,2])+torch.sum((bend_2 - 0)**2,[1,2])) / n_vertices
+			
+			# bending loss based on face angles
+			# TODO
+			
 			
 			# external forces loss
 			L_ext = -torch.mean(torch.einsum('abcd,abcd->acd',a,a_ext),[1,2])*params.dt**2
@@ -120,6 +126,7 @@ for epoch in range(int(params.load_index),params.n_epochs):
 			L_inert = 0.5*torch.mean(torch.sum(M*a**2,dim=1),[1,2])*params.dt**2
 			
 			# total loss
+			#loss_weights = (L_stiff + L_shear + L_bend + L_ext + L_inert + 1e-3).detach()
 			loss_weights = (L_stiff + L_shear + L_bend + L_inert + 1e-3).detach()
 			L = torch.mean(1.0/loss_weights*(L_stiff + L_shear + L_bend + L_ext + L_inert))
 			
@@ -173,5 +180,6 @@ for epoch in range(int(params.load_index),params.n_epochs):
 			ax.set_ylim(-64, 64)
 			plt.draw()
 			plt.pause(0.001)
-
+	
 	logger.save_state(ema_net,optimizer,epoch+1)
+	scheduler.step()

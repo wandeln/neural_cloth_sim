@@ -53,6 +53,7 @@ def get_params():
 	parser.add_argument('--min_bending', default=None, type=float, help='min bending range parameter of cloth (default: same as bending)')
 	parser.add_argument('--a_ext', default=1, type=float, help='gravitational constant (external acceleration)')
 	parser.add_argument('--min_a_ext', default=None, type=float, help='min gravitational constant (default: same as a_ext)')
+	parser.add_argument('--a_ext_noise_range', default=0, type=float, help='additional gauss noise for a_ext (default: 0)')
 	parser.add_argument('--g', default=1, type=float, help='gravitational constant (deprecated: use a_ext instead!)')
 	parser.add_argument('--L_0', default=1, type=float, help='rest length of cloth grid edges')
 	parser.add_argument('--dt', default=1, type=float, help='timestep of cloth simulation integrator')

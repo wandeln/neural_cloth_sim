@@ -42,7 +42,7 @@ def rotation_matrix(dyaw=0.0,dpitch=0.0,droll=0.0,device=None):
 
 
 class Dataset:
-	def __init__(self,h,w,batch_size=100,dataset_size=1000,average_sequence_length=5000,interactive=False,dt=1,L_0=1,stiffness_range=None,shearing_range=None,bending_range=None,a_ext_range=None):
+	def __init__(self,h,w,batch_size=100,dataset_size=1000,average_sequence_length=5000,interactive=False,dt=1,L_0=1,stiffness_range=None,shearing_range=None,bending_range=None,a_ext_range=None,a_ext_noise_range=0):
 		self.h,self.w = h,w
 		self.batch_size = batch_size
 		self.dataset_size = dataset_size
@@ -71,6 +71,7 @@ class Dataset:
 		self.a_exts_damping = 0.999
 		self.da_exts_dt = torch.zeros(self.dataset_size,3,self.h,self.w)# derivatives of external forces
 		self.da_exts_dt_damping = 0.95
+		self.a_ext_noise_range = a_ext_noise_range
 		
 		x_space = torch.linspace(0,L_0*(w-1),w)
 		y_space = torch.linspace(-L_0*(h-1)/2,L_0*(h-1)/2,h)
@@ -145,9 +146,9 @@ class Dataset:
 		
 		
 		# update external forces (CODO: clip min/max forces) ...not very efficient (slows down test_cv2_interactive by approx 10%)
-		self.a_exts[self.indices,:,:,:] = self.a_exts_damping*self.a_exts[self.indices,:,:,:]+(1-self.a_exts_damping)*self.g_vect[self.indices]+0.01*self.da_exts_dt[self.indices,:,:,:] # TODO: add g_vect
-		if torch.rand(1)<0.1:
-			gaussian_w = torch.rand(1)*300
+		self.a_exts[self.indices,:,:,:] = self.a_exts_damping*self.a_exts[self.indices,:,:,:]+(1-self.a_exts_damping)*self.g_vect[self.indices]+0.01*self.da_exts_dt[self.indices,:,:,:]
+		if torch.rand(1)<0.3:
+			gaussian_w = (torch.rand(1)*30)**2
 			gaussian = torch.exp(-((self.x_mesh-torch.rand(1,1)*self.w)**2+(self.y_mesh-torch.rand(1,1)*self.h)**2)/gaussian_w).unsqueeze(0).unsqueeze(1)
 			gaussian = gaussian*torch.randn(1,3,1,1)
 		else:
@@ -161,11 +162,12 @@ class Dataset:
 			x[:,:3,0,0] = self.conditions[self.indices,0,:]*(torch.cos(self.T[self.indices]*self.pinch_freq[self.indices])*0.4+0.6) + torch.sin(self.T[self.indices]*self.translation_freq[self.indices])*self.translation_amp[self.indices]
 			x[:,:3,-1,0] = self.conditions[self.indices,1,:]*(torch.cos(self.T[self.indices]*self.pinch_freq[self.indices])*0.4+0.6) + torch.sin(self.T[self.indices]*self.translation_freq[self.indices])*self.translation_amp[self.indices]
 			v[:,:,0,0] = v[:,:,-1,0] = 0
-			return x,v # CODO: be more careful with BC...
+			return x,v # CODO: be more careful with BC... (e.g. pass them also to neural net)
 		
-		# TODO: add random noise to a_exts
+		# add random noise to a_exts
+		a_ext_noise = self.a_ext_noise_range*torch.rand(self.batch_size).unsqueeze(1).unsqueeze(2).unsqueeze(3)*torch.randn(self.batch_size,3,self.h,self.w)
 		
-		return self.x_v[self.indices], self.stiffnesses[self.indices], self.shearings[self.indices], self.bendings[self.indices], self.a_exts[self.indices], self.M, BoundaryConditions
+		return self.x_v[self.indices], self.stiffnesses[self.indices], self.shearings[self.indices], self.bendings[self.indices], self.a_exts[self.indices]+a_ext_noise, self.M, BoundaryConditions
 	
 	def tell(self,x_v_new):
 		self.x_v[self.indices,:,:,:] = x_v_new.detach()

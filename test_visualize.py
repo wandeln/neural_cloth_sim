@@ -59,7 +59,7 @@ with torch.no_grad():#enable_grad():#
 			print(f"t: {t}")
 			
 			if custom_setup:
-				shearings[0:1] = bendings[0:1] = 10#0.1#np.exp(np.cos(t/100)*3-1)#1#
+				shearings[0:1] = bendings[0:1] = 10#np.exp(np.cos(t/100)*3-1)#0.1#1#
 				stiffnesses[0:1] = 10000#np.cos(t/100)*450+550#
 			else:
 				x_v, stiffnesses, shearings, bendings, a_ext, M, bc = dataset.ask()
