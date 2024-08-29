@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
-from setups_multistep import Dataset
+#from setups_multistep import Dataset
+from setups_multistep_1_channel import Dataset
 from cloth_net import get_Net
 from Logger import Logger
 import torch

@@ -7,6 +7,8 @@ from utils import normalize_grads
 from unet_parts import *
 device = 'cuda' if params.cuda else 'cpu'
 
+eps = 1e-6# 1e-12
+
 def get_Net(params):
 	if params.net == "UNet":
 		net = Cloth_Unet(params.hidden_size)
@@ -30,6 +32,8 @@ def get_Net(params):
 		net = Grad_net_tiny()
 	elif params.net == "Grad_net_scale_inv":
 		net = Grad_net_scale_inv(params.hidden_size)
+	elif params.net == "Grad_net_scale_inv_1_channel":
+		net = Grad_net_scale_inv_1_channel(params.hidden_size)
 	return net
 
 class Grad_net(nn.Module):
@@ -184,6 +188,67 @@ class Grad_net_scale_inv(nn.Module):
 		#print(f"scales: {scales[:,0,0,0]} / d_scales: {d_scale[:,0]}") # => CODO: visualize that in test script...
 		
 		new_hidden_states = [[grads[i:i+1].detach(),update_step[i:i+1].detach(),scales[i:i+1].detach()] for i,_ in enumerate(hidden_states)]
+		
+		return step, new_hidden_states
+
+
+class Grad_net_scale_inv_1_channel(nn.Module):
+	# similar to Grad_net_scale_inv but now, every channel (e.g. x/y/z) is considered separately
+	# => this way, the network can be applied to more different datasets
+	
+	def __init__(self,hidden_size=64,bilinear=True):
+		
+		super(Grad_net_scale_inv_1_channel, self).__init__()
+		self.initial_scale = 0.1 # ?
+		self.nn = MixedUnet(3*1,1,1,hidden_size,bilinear)
+	
+	def forward(self, grads, hidden_states=None):
+		
+		# CODO: use hidden state for concepts such as momentum / scaling
+		# TODO: transform grads into 1-channel grads
+		# (and transform update steps back later
+		bs, c, h, w = grads.shape
+		grads = grads.reshape(bs*c, 1, h, w)
+		
+		
+		# hidden states for last gradients / last update step / scale
+		hidden_states = [[torch.zeros(c,1,h,w,device=device),torch.zeros(c,1,h,w,device=device),torch.ones(c,1,1,1,device=device)*self.initial_scale] if hs is None else hs for hs in hidden_states]
+		
+		last_grads = torch.cat([hs[0] for hs in hidden_states],0)
+		last_steps = torch.cat([hs[1] for hs in hidden_states],0)
+		last_scales = torch.cat([hs[2] for hs in hidden_states],0)
+		
+		std = grads.std([1,2,3]).detach().clamp_min(eps).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+		
+		normalized_grads = (grads/std).clamp(min=-10,max=10)
+		normalized_last_grads = (last_grads/std).clamp(min=-10,max=10)
+		
+		inputs = torch.cat([normalized_grads, normalized_last_grads, last_steps],1)
+		
+		update_step, d_scale = self.nn(inputs)
+		"""
+		print(f"update_step.shape: {update_step.shape}")
+		print(f"d_scale.shape: {d_scale.shape}")
+		print(f"update_step: {update_step}")
+		print(f"d_scale: {d_scale}")"""
+		# CODO: more scaling?
+		
+		# gradient normalization (normalize_grads) => so gradients at different optimization stages get equal weights
+		update_step = normalize_grads(update_step)
+		d_scale = normalize_grads(d_scale) # => dadurch werden gradienten bzgl scaling immer = +- 1 ?! (... ist vermutlich gar nicht so schlimm)
+		
+		update_step = torch.tanh(update_step)
+		d_scale = torch.exp(2*torch.tanh(d_scale/2))
+		
+		scales = last_scales*d_scale.unsqueeze(2).unsqueeze(3)
+		step = update_step*scales
+		
+		#print(f"scales: {scales[:,0,0,0]} / d_scales: {d_scale[:,0]}") # => CODO: visualize that in test script...
+		
+		new_hidden_states = [[grads[i*c:(i+1)*c].detach(),update_step[i*c:(i+1)*c].detach(),scales[i*c:(i+1)*c].detach()] for i,_ in enumerate(hidden_states)]
+		step = step.reshape(bs, c, h, w)
+		
+		#print(f"step: {step}")
 		
 		return step, new_hidden_states
 

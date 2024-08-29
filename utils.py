@@ -33,6 +33,7 @@ class NormalizeGrads(Function):
 		
 	@staticmethod
 	def backward(ctx, grad_output):
-		return normalize(grad_output,dim=[i+1 for i in range(len(grad_output.shape)-1)])
+		# achtung, normalization kann sehr hohe / niedrige werte zurückgeben, wenn fast alles = 0 ist => min / max clampen
+		return normalize(grad_output,dim=[i+1 for i in range(len(grad_output.shape)-1)]).clamp(min=-10,max=10)
 
 normalize_grads = NormalizeGrads.apply
