@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from setups import Dataset
 from cloth_net import Cloth_net
-from loss_terms import L_stiffness,L_shear,L_gravity,L_inertia
+from loss_terms import L_stiffness,L_shearing,L_gravity,L_inertia
 import torch
 from torch.optim import Adam
 import numpy as np
@@ -26,7 +26,7 @@ for epoch in range(params.n_epochs):
 	for step in range(params.n_batches_per_epoch):
 		print(f"( {step} / {params.n_batches_per_epoch} )")
 		
-		x_v, M, bc = dataset.ask()
+		x_v, stiffnesses, shearings, bendings, a_exts, M, bc = dataset.ask()
 		x_v, M = toCuda([x_v, M])
 		
 		a = toCuda(torch.zeros(params.batch_size,3,params.height,params.width)).requires_grad_()
@@ -42,9 +42,11 @@ for epoch in range(params.n_epochs):
 			x_new,v_new = bc(x_new,v_new)
 			
 			# compute loss
-			L = L_stiffness(x_new) + L_gravity(x_new, M) + L_shear(x_new) + L_inertia(a, M)
+			L = L_stiffness(x_new) + L_gravity(x_new, M) + L_shearing(x_new) + L_inertia(a, M)
 			L = L/params.height/params.width#/1e6
 			print(f"L: {L.detach().cpu().numpy()}")
+			
+			
 			
 			# optimize Network
 			o.zero_grad()
@@ -63,6 +65,7 @@ for epoch in range(params.n_epochs):
 			ax.set_zlim(-120, 1.01)
 			ax.set_xlim(-64, 64)
 			ax.set_ylim(-32, 96)
+			plt.title(f"stiff: {params.stiffness} bend: {params.bending} shear: {params.shearing}")
 			plt.draw()
 			plt.pause(0.001)
  

@@ -80,8 +80,8 @@ class Dataset:
 		
 		x_0 = torch.cat([x_grid.unsqueeze(0),y_grid.unsqueeze(0),torch.zeros(1,h,w)],dim=0)
 		v_0 = torch.zeros(3,h,w)
-		self.x_v_0 = torch.cat([x_0,v_0],dim=0)
-		self.x_v = torch.zeros(self.dataset_size,6,self.h,self.w)
+		self.x_v_0 = torch.cat([x_0,v_0],dim=0) # initial positions and velocities
+		self.x_v = torch.zeros(self.dataset_size,6,self.h,self.w) # positions and velocities
 		self.T = torch.zeros(self.dataset_size,1) # timestep
 		self.rot_speed = torch.zeros(self.dataset_size,3,3) # delta rotation matrix that is recurrently multiplied onto rotations
 		self.translation_freq = torch.zeros(self.dataset_size,3) # delta rotation matrix that is recurrently multiplied onto rotations
@@ -97,7 +97,7 @@ class Dataset:
 		for i in range(self.dataset_size):
 			self.reset_env(i)
 		
-		self.M = torch.ones(1,1,h,w)
+		self.M = torch.ones(1,1,h,w) # Mass matrix
 		self.M[:,:,0] = self.M[:,:,-1] = self.M[:,:,:,0] = self.M[:,:,:,-1] = 0.5
 		self.M[:,:,0,0] = self.M[:,:,0,-1] = self.M[:,:,-1,0] = self.M[:,:,-1,-1] = 0.25
 		
@@ -112,17 +112,17 @@ class Dataset:
 		self.conditions[index,0] = self.x_v[index,:3,0,0]
 		self.conditions[index,1] = self.x_v[index,:3,-1,0]
 		self.T[index] = 0
-		yaw = (torch.rand(1)-0.5)*2*2*3.14#0#
-		pitch = (torch.rand(1)-0.5)*2*2*3.14#0#
-		roll = (torch.rand(1)-0.5)*2*2*3.14#0#
-		dyaw = (torch.rand(1)-0.5)*2*2*3.14*0.01
-		dpitch = (torch.rand(1)-0.5)*2*2*3.14*0.01
-		droll = (torch.rand(1)-0.5)*2*2*3.14*0.01 # keep only roll for rotation
+		yaw = 0#(torch.rand(1)-0.5)*2*2*3.14#0#
+		pitch = 0#(torch.rand(1)-0.5)*2*2*3.14#0#
+		roll = 0#(torch.rand(1)-0.5)*2*2*3.14#0#
+		dyaw = 0#(torch.rand(1)-0.5)*2*2*3.14*0.01
+		dpitch = 0#(torch.rand(1)-0.5)*2*2*3.14*0.01
+		droll = 0#(torch.rand(1)-0.5)*2*2*3.14*0.01 # keep only roll for rotation
 		self.rot_speed[index] = rotation_matrix(dyaw,dpitch,droll)
 		self.rotations[index] = rotation_matrix(yaw,pitch,roll)
-		self.translation_freq[index] = (torch.rand(3)-0.5)*2*0.2
-		self.translation_amp[index] = (torch.rand(3)-0.5)*2*10
-		self.pinch_freq[index] = (torch.rand(1)-0.5)*2*0.2
+		self.translation_freq[index] = 0#(torch.rand(3)-0.5)*2*0.2
+		self.translation_amp[index] = 0#(torch.rand(3)-0.5)*2*10
+		self.pinch_freq[index] = 0#(torch.rand(1)-0.5)*2*0.2
 		self.conditions[index] = torch.einsum("ab,cb->ca",self.rotations[index],self.conditions[index])
 		self.x_v[index,:3] = torch.einsum("ab,bcd->acd",self.rotations[index],self.x_v[index,:3])
 		#print(f"reset {index}")

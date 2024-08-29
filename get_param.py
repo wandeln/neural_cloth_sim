@@ -19,7 +19,7 @@ def get_params():
 	parser = argparse.ArgumentParser(description='train / test a pytorch model to simulate cloth')
 
 	# Network parameters
-	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","SMP_param_a","SMP_param_a_gated","SMP_param_a_gated2","SMP_param_a_gated3","UNet","UNet_param_a"])
+	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","SMP_param_a","SMP_param_a_gated","SMP_param_a_gated2","SMP_param_a_gated3","UNet","UNet_param_a","Grad_net","Grad_net_tiny","Grad_net_scale_inv"])
 	parser.add_argument('--SMP_model_type', default="Unet", type=str, help='model type used for SMP segmentation nets')
 	parser.add_argument('--SMP_encoder_name', default="resnet34", type=str, help='encoder name used for SMP segmentation nets')
 	parser.add_argument('--hidden_size', default=20, type=int, help='hidden size of network (default: 20)')
@@ -27,6 +27,7 @@ def get_params():
 	# Training parameters
 	parser.add_argument('--n_epochs', default=100, type=int, help='number of epochs (after each epoch, the model gets saved)')
 	parser.add_argument('--n_batches_per_epoch', default=500, type=int, help='number of batches per epoch (default: 5000)')
+	parser.add_argument('--iterations_per_timestep', default=1000, type=int, help='number of batches per epoch (default: 1000)') # should be much less later (maybe 3) or adaptive
 	parser.add_argument('--batch_size', default=100, type=int, help='batch size (default: 100)')
 	parser.add_argument('--average_sequence_length', default=1000, type=int, help='average sequence length in dataset (default: 1000)')
 	parser.add_argument('--dataset_size', default=500, type=int, help='size of dataset (default: 1000)')
@@ -97,20 +98,20 @@ def get_params():
 params = get_params()
 
 def get_hyperparam(params):
-	if params.net=="SMP_param" or params.net=="SMP_param_a" or params.net=="SMP_param_a_gated" or params.net=="SMP_param_a_gated2" or params.net=="SMP_param_a_gated3":
+	if params.net=="SMP_param" or params.net=="SMP_param_a" or params.net=="SMP_param_a_gated" or params.net=="SMP_param_a_gated2" or params.net=="SMP_param_a_gated3" or params.net=="Grad_net":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
-	if params.net=="UNet_param_a":
+	if params.net=="UNet_param_a" or params.net=="Grad_net_scale_inv":
 		return f"net {params.net}; hs {params.hidden_size}; dt {params.dt};"
 	return f"net {params.net}; hs {params.hidden_size}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
 
 def get_load_hyperparam(params):
-	if params.net=="SMP_param" or params.net=="SMP_param_a" or params.net=="SMP_param_a_gated" or params.net=="SMP_param_a_gated2" or params.net=="SMP_param_a_gated3":
+	if params.net=="SMP_param" or params.net=="SMP_param_a" or params.net=="SMP_param_a_gated" or params.net=="SMP_param_a_gated2" or params.net=="SMP_param_a_gated3" or params.net=="Grad_net":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.l_dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"
-	if params.net=="UNet_param_a":
+	if params.net=="UNet_param_a" or params.net=="Grad_net_scale_inv":
 		return f"net {params.net}; hs {params.hidden_size}; dt {params.l_dt};"
 	return f"net {params.net}; hs {params.hidden_size}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"
 

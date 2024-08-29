@@ -19,7 +19,7 @@ else
 	exec=main.py
 fi
 
-install_dir=/hdd/data/wandel/anaconda/anaconda3/envs/env_pytorch/bin
+install_dir=$CONDA_PREFIX/bin
 
 source activate env_pytorch
 
