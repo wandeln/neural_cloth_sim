@@ -4,6 +4,8 @@ from torch.nn.functional import normalize
 
 # "pseudo function" that doesn't affect the outputs but only scales the gradients
 
+eps = 1e-12#1e-6#
+
 class ScaleGrads(Function):
 	@staticmethod
 	def forward(input, scale):
@@ -34,6 +36,10 @@ class NormalizeGrads(Function):
 	@staticmethod
 	def backward(ctx, grad_output):
 		# achtung, normalization kann sehr hohe / niedrige werte zurückgeben, wenn fast alles = 0 ist => min / max clampen
-		return normalize(grad_output,dim=[i+1 for i in range(len(grad_output.shape)-1)]).clamp(min=-10,max=10)
+		return normalize(grad_output,dim=[i+1 for i in range(len(grad_output.shape)-1)])#.clamp(min=-10,max=10)
+		
+		#std = torch.mean(grad_output**2,dim=[i+1 for i in range(len(grad_output.shape)-1)]).detach().clamp_min(eps).reshape(*([grad_output.shape[0]]+[1 for i in range(len(grad_output.shape)-1)])) # bringt nichts (sollte das selbe wie normalize tun)
+		#return grad_output/std
+		
 
 normalize_grads = NormalizeGrads.apply

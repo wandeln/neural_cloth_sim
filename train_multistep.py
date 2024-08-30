@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
+#from setups_multistep_1_channel import Dataset
 from setups_multistep import Dataset
+from setups_transform import DatasetToSingleChannel
 from cloth_net import get_Net
 #from loss_terms import L_stiffness,L_shearing,L_bending,L_a_ext,L_inertia
 from Logger import Logger
@@ -33,7 +35,10 @@ if params.load_latest or params.load_date_time is not None or params.load_index 
 	print(f"loaded: {params.load_date_time}, {params.load_index}")
 params.load_index = 0 if params.load_index is None else params.load_index
 
-dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,iterations_per_timestep=params.iterations_per_timestep)
+original_dataset = Dataset(params.height,params.width,params.batch_size,params.dataset_size,params.average_sequence_length,iterations_per_timestep=params.iterations_per_timestep)
+#dataset = original_dataset
+dataset = DatasetToSingleChannel(original_dataset)
+
 
 
 for epoch in range(int(params.load_index),params.n_epochs):
@@ -63,10 +68,10 @@ for epoch in range(int(params.load_index),params.n_epochs):
 		optimizer.step()
 		
 		if params.plot:
-			index = dataset.indices[0]
+			index = original_dataset.indices[0]
 			
-			x = dataset.x[index].cpu()
-			a = dataset.a[index].cpu()
+			x = original_dataset.x[index].cpu()
+			a = original_dataset.a[index].cpu()
 			
 			plt.clf()
 			fig, ax = plt.subplots(1,1,subplot_kw={"projection": "3d"},num=1)
@@ -86,7 +91,7 @@ for epoch in range(int(params.load_index),params.n_epochs):
 			ax.set_zlim(-100, 1.01)
 			ax.set_xlim(-50, 50)
 			ax.set_ylim(-50, 50)
-			plt.title(f"i: {dataset.iterations[index]}; T: {dataset.T[index]}")
+			plt.title(f"i: {original_dataset.iterations[index]}; T: {original_dataset.T[index]}")
 			
 			plt.draw()
 			plt.pause(0.01)

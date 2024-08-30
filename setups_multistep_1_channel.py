@@ -3,6 +3,9 @@ import numpy as np
 from get_param import params,toCuda,toCpu
 from itertools import chain
 
+# deprecated!!!!!!!!!!!!!
+# use instead setups_multistep.Dataset in combination with setups_transform.DatasetToSingleChannel
+
 eps = 1e-7
 device = 'cuda' if params.cuda else 'cpu'
 
@@ -319,11 +322,11 @@ class Dataset:
 		# compute loss => CODO: scaling of loss?
 		l, E_int = loss(self.x[self.indices],self.v[self.indices],acc,self.a_exts[self.indices],self.bc_masks[self.indices],self.bc_positions[self.indices],self.M,self.stiffnesses[self.indices],self.shearings[self.indices],self.bendings[self.indices],self.dt)
 		
-		print(f"E_int: {E_int}")
+		#print(f"E_int: {E_int}")
 		
 		# update step if iterations_per_timestep is reached
 		for i,index in enumerate(self.indices):
-			if E_int[i] > 200e9:
+			if E_int[i] > 2000:
 				self.reset_env(index)
 			else:
 				#self.hidden_states[index] = hidden_states[i]

@@ -1,4 +1,5 @@
-import segmentation_models_pytorch as smp 
+import segmentation_models_pytorch as smp
+import numpy as np
 import torch
 from torch import nn
 from torch.nn.parameter import Parameter
@@ -7,7 +8,7 @@ from utils import normalize_grads
 from unet_parts import *
 device = 'cuda' if params.cuda else 'cpu'
 
-eps = 1e-6# 1e-12
+eps = 1e-12#1e-6#
 
 def get_Net(params):
 	if params.net == "UNet":
@@ -34,6 +35,8 @@ def get_Net(params):
 		net = Grad_net_scale_inv(params.hidden_size)
 	elif params.net == "Grad_net_scale_inv_1_channel":
 		net = Grad_net_scale_inv_1_channel(params.hidden_size)
+	elif params.net == "Grad_net_scale_inv_1_channel2":
+		net = Grad_net_scale_inv_1_channel2(params.hidden_size)
 	return net
 
 class Grad_net(nn.Module):
@@ -185,6 +188,8 @@ class Grad_net_scale_inv(nn.Module):
 		scales = last_scales*d_scale.unsqueeze(2).unsqueeze(3)
 		step = update_step*scales
 		
+		#print(f"scales: {scales[:,0,0,0]} = {last_scales[:,0,0,0]} * {d_scale[:,0]} / {std[:,0,0,0]}")
+		
 		#print(f"scales: {scales[:,0,0,0]} / d_scales: {d_scale[:,0]}") # => CODO: visualize that in test script...
 		
 		new_hidden_states = [[grads[i:i+1].detach(),update_step[i:i+1].detach(),scales[i:i+1].detach()] for i,_ in enumerate(hidden_states)]
@@ -199,7 +204,7 @@ class Grad_net_scale_inv_1_channel(nn.Module):
 	def __init__(self,hidden_size=64,bilinear=True):
 		
 		super(Grad_net_scale_inv_1_channel, self).__init__()
-		self.initial_scale = 0.1 # ?
+		self.initial_scale = 0.05#1#0.05 # ?
 		self.nn = MixedUnet(3*1,1,1,hidden_size,bilinear)
 	
 	def forward(self, grads, hidden_states=None):
@@ -218,19 +223,32 @@ class Grad_net_scale_inv_1_channel(nn.Module):
 		last_steps = torch.cat([hs[1] for hs in hidden_states],0)
 		last_scales = torch.cat([hs[2] for hs in hidden_states],0)
 		
-		std = grads.std([1,2,3]).detach().clamp_min(eps).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+		#std = grads.std([1,2,3]).detach().clamp_min(eps).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+		std = torch.mean(grads**2,[1,2,3]).detach().clamp_min(eps).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+		#print(f"std: {std}")
+		
+		#print(f"std nan: {torch.any(std.isnan())}")
 		
 		normalized_grads = (grads/std).clamp(min=-10,max=10)
 		normalized_last_grads = (last_grads/std).clamp(min=-10,max=10)
 		
+		#print(f"normalized_grads nan: {torch.any(normalized_grads.isnan())}")
+		#print(f"normalized_last_grads nan: {torch.any(normalized_last_grads.isnan())}")
+		#print(f"last_steps nan: {torch.any(last_steps.isnan())}")
+		
 		inputs = torch.cat([normalized_grads, normalized_last_grads, last_steps],1)
 		
 		update_step, d_scale = self.nn(inputs)
+		
+		#print(f"update_step nan: {torch.any(update_step.isnan())}")
+		#print(f"d_scale nan: {torch.any(d_scale.isnan())}")
+		
 		"""
 		print(f"update_step.shape: {update_step.shape}")
 		print(f"d_scale.shape: {d_scale.shape}")
 		print(f"update_step: {update_step}")
-		print(f"d_scale: {d_scale}")"""
+		print(f"d_scale: {d_scale}")
+		print(f"scale: {scale}")"""
 		# CODO: more scaling?
 		
 		# gradient normalization (normalize_grads) => so gradients at different optimization stages get equal weights
@@ -238,10 +256,13 @@ class Grad_net_scale_inv_1_channel(nn.Module):
 		d_scale = normalize_grads(d_scale) # => dadurch werden gradienten bzgl scaling immer = +- 1 ?! (... ist vermutlich gar nicht so schlimm)
 		
 		update_step = torch.tanh(update_step)
-		d_scale = torch.exp(2*torch.tanh(d_scale/2))
+		#d_scale = torch.exp(2*torch.tanh(d_scale/2))
+		d_scale = torch.exp(torch.tanh(d_scale))
 		
 		scales = last_scales*d_scale.unsqueeze(2).unsqueeze(3)
-		step = update_step*scales
+		step = update_step*scales#*std
+		
+		print(f"scales: {scales[:,0,0,0]} = {last_scales[:,0,0,0]} * {d_scale[:,0]} / {std[:,0,0,0]}")
 		
 		#print(f"scales: {scales[:,0,0,0]} / d_scales: {d_scale[:,0]}") # => CODO: visualize that in test script...
 		
@@ -249,6 +270,58 @@ class Grad_net_scale_inv_1_channel(nn.Module):
 		step = step.reshape(bs, c, h, w)
 		
 		#print(f"step: {step}")
+		
+		return step, new_hidden_states
+
+class Grad_net_scale_inv_1_channel2(nn.Module):
+	# same as Grad_net_scale_inv_1_channel, but doesn't work with multiple channels anymore (for simplicity)
+	
+	def __init__(self,hidden_size=64,bilinear=True):
+		
+		super(Grad_net_scale_inv_1_channel2, self).__init__()
+		self.initial_scale = 0.05#1#0.05 # ?
+		self.nn = MixedUnet(3*1,1,1,hidden_size,bilinear)
+	
+	def forward(self, grads, hidden_states=None):
+		"""
+		:grads: input gradients of shape: batch_size x 1 x h x w
+		:hidden_states: list of length batch_size
+		:return:
+			:step: update step of shape: batch_size x 1 x h x w
+			:new_hidden_states: list of length batch_size
+		"""
+		bs, c, h, w = grads.shape
+		
+		# hidden states for last gradients / last update step / scale
+		hidden_states = [[torch.zeros_like(grads[0:1]),torch.zeros_like(grads[0:1]),torch.ones(1,1,1,1,device=device)*self.initial_scale] if hs is None else hs for hs in hidden_states]
+		
+		last_grads = torch.cat([hs[0] for hs in hidden_states],0)
+		last_steps = torch.cat([hs[1] for hs in hidden_states],0)
+		last_scales = torch.cat([hs[2] for hs in hidden_states],0)
+		
+		#std = grads.std([1,2,3]).detach().clamp_min(eps).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+		#std = torch.mean(grads**2,[1,2,3]).detach().clamp_min(eps).unsqueeze(1).unsqueeze(2).unsqueeze(3)
+		std = grads.norm(p=2.0,dim=[1,2,3],keepdim=True).detach().clamp_min(eps).expand_as(grads)/np.sqrt(h*w)
+		
+		normalized_grads = 10*torch.tanh(grads/std/10)#.clamp(min=-10,max=10) # maybe use "soft" tanh instead
+		normalized_last_grads = 10*torch.tanh(last_grads/std/10)#.clamp(min=-10,max=10)
+		
+		inputs = torch.cat([normalized_grads, normalized_last_grads, last_steps],1)
+		
+		update_step, d_scale = self.nn(inputs)
+		
+		# gradient normalization (normalize_grads) => so gradients at different optimization stages get equal weights
+		update_step = normalize_grads(update_step)
+		d_scale = normalize_grads(d_scale) # => dadurch werden gradienten bzgl scaling immer = +- 1 ?! (... ist vermutlich gar nicht so schlimm)
+		
+		update_step = torch.tanh(update_step)
+		#d_scale = torch.exp(2*torch.tanh(d_scale/2))
+		d_scale = torch.exp(torch.tanh(d_scale))
+		
+		scales = last_scales*d_scale.unsqueeze(2).unsqueeze(3)
+		step = update_step*scales#*std # TODO: test std scaling again...
+		
+		new_hidden_states = [[grads[i:(i+1)].detach(),update_step[i:(i+1)].detach(),scales[i:(i+1)].detach()] for i,_ in enumerate(hidden_states)]
 		
 		return step, new_hidden_states
 

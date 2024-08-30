@@ -19,7 +19,7 @@ def get_params():
 	parser = argparse.ArgumentParser(description='train / test a pytorch model to simulate cloth')
 
 	# Network parameters
-	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","SMP_param_a","SMP_param_a_gated","SMP_param_a_gated2","SMP_param_a_gated3","UNet","UNet_param_a","Grad_net","Grad_net_tiny","Grad_net_scale_inv","Grad_net_scale_inv_1_channel"])
+	parser.add_argument('--net', default="SMP", type=str, help='network to train (default: SMP)', choices=["SMP","SMP_param","SMP_param_a","SMP_param_a_gated","SMP_param_a_gated2","SMP_param_a_gated3","UNet","UNet_param_a","Grad_net","Grad_net_tiny","Grad_net_scale_inv","Grad_net_scale_inv_1_channel","Grad_net_scale_inv_1_channel2"])
 	parser.add_argument('--SMP_model_type', default="Unet", type=str, help='model type used for SMP segmentation nets')
 	parser.add_argument('--SMP_encoder_name', default="resnet34", type=str, help='encoder name used for SMP segmentation nets')
 	parser.add_argument('--hidden_size', default=20, type=int, help='hidden size of network (default: 20)')
@@ -102,7 +102,7 @@ def get_hyperparam(params):
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
-	if params.net=="UNet_param_a" or params.net=="Grad_net_scale_inv" or params.net=="Grad_net_scale_inv_1_channel":
+	if params.net=="UNet_param_a" or params.net=="Grad_net_scale_inv" or params.net=="Grad_net_scale_inv_1_channel" or params.net=="Grad_net_scale_inv_1_channel2":
 		return f"net {params.net}; hs {params.hidden_size}; dt {params.dt};"
 	return f"net {params.net}; hs {params.hidden_size}; stiff {params.stiffness}; shear {params.shearing}; bend {params.bending}; dt {params.dt};"
 
@@ -111,7 +111,7 @@ def get_load_hyperparam(params):
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; dt {params.l_dt};"
 	if params.net=="SMP":
 		return f"net {params.net}; type {params.SMP_model_type}; enc {params.SMP_encoder_name}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"
-	if params.net=="UNet_param_a" or params.net=="Grad_net_scale_inv" or params.net=="Grad_net_scale_inv_1_channel":
+	if params.net=="UNet_param_a" or params.net=="Grad_net_scale_inv" or params.net=="Grad_net_scale_inv_1_channel" or params.net=="Grad_net_scale_inv_1_channel2":
 		return f"net {params.net}; hs {params.hidden_size}; dt {params.l_dt};"
 	return f"net {params.net}; hs {params.hidden_size}; stiff {params.l_stiffness}; shear {params.l_shearing}; bend {params.l_bending}; dt {params.l_dt};"
 

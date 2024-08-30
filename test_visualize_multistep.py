@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
-#from setups_multistep import Dataset
-from setups_multistep_1_channel import Dataset
+from setups_multistep import Dataset
+#from setups_multistep_1_channel import Dataset
+from setups_transform import DatasetToSingleChannel
 from cloth_net import get_Net
 from Logger import Logger
 import torch
@@ -33,7 +34,9 @@ plt.figure(1,figsize=(20,20),dpi=200)
 
 with torch.no_grad():#enable_grad():#
 	for epoch in range(100):
-		dataset = Dataset(params.height,params.width,1,1,params.average_sequence_length,iterations_per_timestep=params.iterations_per_timestep)
+		original_dataset = Dataset(params.height,params.width,1,1,params.average_sequence_length,iterations_per_timestep=params.iterations_per_timestep)
+		#dataset = original_dataset
+		dataset = DatasetToSingleChannel(original_dataset)
 		FPS=0
 		start_time = time.time()
 
@@ -51,8 +54,8 @@ with torch.no_grad():#enable_grad():#
 			if t%10==0:
 				index = 0
 				
-				x = dataset.x[index].cpu()
-				a = dataset.a[index].cpu()
+				x = original_dataset.x[index].cpu()
+				a = original_dataset.a[index].cpu()
 				
 				plt.clf()
 				fig, ax = plt.subplots(1,1,subplot_kw={"projection": "3d"},num=1)
@@ -72,10 +75,12 @@ with torch.no_grad():#enable_grad():#
 				ax.set_zlim(-100, 1.01)
 				ax.set_xlim(-50, 50)
 				ax.set_ylim(-50, 50)
-				plt.title(f"i: {dataset.iterations[index]}; T: {dataset.T[index]}")
+				plt.title(f"i: {original_dataset.iterations[index]}; T: {original_dataset.T[index]}")
 				
 				plt.draw()
 				plt.pause(0.01)
+				#plt.pause(1)
+				#plt.show()
 		
 		end_time = time.time()
 		print(f"dt = {end_time-start_time}s")

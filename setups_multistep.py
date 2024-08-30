@@ -182,6 +182,9 @@ class Dataset:
 		self.reset_i = 0
 		
 	def reset_env(self,index):
+		
+		self.hidden_states[index] = None
+		
 		self.stiffnesses[index] = 1000#torch.exp(self.stiffness_range[0]+torch.rand(1)*self.stiffness_range[1])
 		self.shearings[index] = 10#0#torch.exp(self.shearing_range[0]+torch.rand(1)*self.shearing_range[1])
 		self.bendings[index] = 0#10#torch.exp(self.bending_range[0]+torch.rand(1)*self.bending_range[1])
@@ -315,12 +318,13 @@ class Dataset:
 			self.hidden_states[index] = hidden_states[i]
 			if self.iterations[index] % self.iterations_per_timestep == 0:
 				self.T[index] = self.T[index] + self.dt
-				
 				self.update_env(index)
+				if E_int[i] > 20000:
+					self.reset_env(index)
 		
 		# reset environments eventually TODO: check that / reset environment, if E_int becomes too large!
 		self.step += 1
-		if self.step % (self.average_sequence_length/self.batch_size) == 0:#ca x*batch_size steps until env gets reset
+		if self.step % (self.average_sequence_length/self.batch_size / self.iterations_per_timestep) == 0:#ca x*batch_size steps until env gets reset => TODO attention!: average_sequence_length mut be divisible by (batch_size*iterations_per_timestep)!
 			self.reset_env(int(self.reset_i))
 			self.reset_i = (self.reset_i+1)%self.dataset_size
 			
